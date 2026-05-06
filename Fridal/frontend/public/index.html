@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fridail — Downtime Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ─── Reset & Variables ─────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0b0e13;
+    --surface:   #131820;
+    --surface2:  #1a2030;
+    --border:    #232d3f;
+    --border2:   #2d3a50;
+    --accent:    #e8a020;
+    --accent2:   #f0c060;
+    --red:       #e84040;
+    --red-dim:   rgba(232,64,64,0.15);
+    --green:     #38c172;
+    --green-dim: rgba(56,193,114,0.12);
+    --blue:      #4a9eff;
+    --blue-dim:  rgba(74,158,255,0.12);
+    --text:      #e8edf5;
+    --text-dim:  #7a8ba0;
+    --text-mute: #404f62;
+    --mono:      'DM Mono', monospace;
+    --sans:      'DM Sans', sans-serif;
+    --display:   'Bebas Neue', sans-serif;
+  }
+
+  html { font-size: 14px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+
+  /* ─── Header ────────────────────────────────────────────────────── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .logo-text {
+    font-family: var(--display);
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: var(--text);
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-top: -2px;
+    display: block;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .live-clock {
+    font-family: var(--mono);
+    font-size: 20px;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+
+  .date-str {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: right;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .status-pill.ok { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .status-pill.alarm { background: var(--red-dim); border-color: var(--red); color: var(--red); animation: pulse-border 1s infinite; }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .status-pill.alarm .dot { animation: blink 0.8s step-end infinite; }
+
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes pulse-border { 0%,100% { box-shadow: 0 0 0 0 rgba(232,64,64,0.3); } 50% { box-shadow: 0 0 0 5px rgba(232,64,64,0); } }
+
+  /* ─── Layout ─────────────────────────────────────────────────────── */
+  .container { max-width: 1400px; margin: 0 auto; padding: 28px 32px; }
+
+  /* ─── Stat Cards ─────────────────────────────────────────────────── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.6;
+  }
+  .stat-card.red::before { background: var(--red); }
+  .stat-card.green::before { background: var(--green); }
+  .stat-card.blue::before { background: var(--blue); }
+
+  .stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px; }
+  .stat-value { font-family: var(--display); font-size: 40px; line-height: 1; color: var(--text); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.blue { color: var(--blue); }
+  .stat-sub { font-size: 11px; color: var(--text-mute); margin-top: 6px; font-family: var(--mono); }
+
+  /* ─── Active Stop Banner ─────────────────────────────────────────── */
+  .active-banner {
+    background: var(--red-dim);
+    border: 1px solid var(--red);
+    border-radius: 10px;
+    padding: 16px 24px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    display: none;
+  }
+  .active-banner.visible { display: flex; }
+  .banner-left { display: flex; align-items: center; gap: 12px; }
+  .banner-icon { font-size: 22px; }
+  .banner-title { font-size: 14px; font-weight: 600; color: var(--red); }
+  .banner-time { font-family: var(--mono); font-size: 22px; color: var(--red); }
+
+  /* ─── Section Headers ────────────────────────────────────────────── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: var(--text);
+  }
+  .section-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 3px 10px;
+    border-radius: 4px;
+  }
+
+  /* ─── Table ──────────────────────────────────────────────────────── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 28px;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: var(--surface2);
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+
+  tbody td { padding: 12px 16px; font-size: 13px; }
+  tbody td.mono { font-family: var(--mono); font-size: 13px; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 4px;
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1px;
+    border: 1px solid;
+  }
+  .badge.active  { background: var(--red-dim);   color: var(--red);   border-color: var(--red); }
+  .badge.pending { background: rgba(232,160,32,0.12); color: var(--accent); border-color: var(--accent); }
+  .badge.done    { background: var(--green-dim);  color: var(--green); border-color: var(--green); }
+  .badge.micro   { background: var(--blue-dim);   color: var(--blue);  border-color: var(--blue); }
+  .badge .dot-small { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .badge.active .dot-small { animation: blink 0.8s step-end infinite; }
+
+  /* ─── Selects in table ───────────────────────────────────────────── */
+  .cause-select {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: var(--sans);
+    font-size: 12px;
+    cursor: pointer;
+    min-width: 180px;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237a8ba0'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+  .cause-select:focus { border-color: var(--accent); }
+  .cause-select:disabled { opacity: 0.4; cursor: default; }
+  .cause-select option { background: var(--surface2); }
+
+  /* ─── Buttons ────────────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 18px; border-radius: 7px;
+    font-family: var(--sans); font-size: 13px; font-weight: 600;
+    cursor: pointer; border: 1px solid; transition: all 0.18s;
+    letter-spacing: 0.5px;
+  }
+  .btn-primary {
+    background: var(--accent); color: #000; border-color: var(--accent);
+  }
+  .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); }
+  .btn-danger { background: transparent; color: var(--red); border-color: var(--red); }
+  .btn-danger:hover { background: var(--red-dim); }
+  .btn-ghost { background: transparent; color: var(--text-dim); border-color: var(--border2); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--border2); background: var(--surface2); }
+  .btn-sim { background: var(--blue-dim); color: var(--blue); border-color: var(--blue); font-size: 11px; padding: 6px 12px; }
+  .btn-sim:hover { background: rgba(74,158,255,0.2); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ─── Bottom bar ─────────────────────────────────────────────────── */
+  .actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 28px;
+  }
+
+  .pending-note { font-size: 12px; color: var(--text-dim); }
+  .pending-note span { color: var(--accent); font-weight: 600; font-family: var(--mono); }
+
+  /* ─── Modal ──────────────────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    display: none; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 14px;
+    width: 640px;
+    max-width: 95vw;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    animation: slide-up 0.2s ease;
+  }
+  @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } }
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-title { font-family: var(--display); font-size: 20px; letter-spacing: 2px; }
+  .modal-close { background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+  .modal-close:hover { color: var(--text); background: var(--surface2); }
+  .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 12px; justify-content: flex-end; }
+
+  /* ─── Causes editor ──────────────────────────────────────────────── */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; min-height: 40px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    padding: 5px 10px; border-radius: 6px; font-size: 12px;
+    color: var(--text);
+  }
+  .tag-remove { background: none; border: none; color: var(--text-mute); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+  .tag-remove:hover { color: var(--red); }
+  .add-row { display: flex; gap: 10px; }
+  .input-field {
+    flex: 1;
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text); border-radius: 7px; padding: 9px 13px;
+    font-family: var(--sans); font-size: 13px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-field:focus { border-color: var(--accent); }
+  .input-field::placeholder { color: var(--text-mute); }
+
+  .form-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-dim); font-weight: 600; margin-bottom: 8px; display: block; }
+
+  /* ─── Toast ──────────────────────────────────────────────────────── */
+  #toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text); padding: 12px 20px; border-radius: 8px;
+    font-size: 13px; z-index: 9999;
+    transform: translateY(80px); opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: var(--green); }
+  #toast.error { border-color: var(--red); }
+
+  /* ─── Simulator panel ────────────────────────────────────────────── */
+  .sim-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+  .sim-panel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .sim-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--blue); font-weight: 600; }
+  .sim-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .sim-note { font-size: 11px; color: var(--text-mute); font-family: var(--mono); }
+  .sim-min-input {
+    width: 70px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text); border-radius: 6px; padding: 6px 10px;
+    font-family: var(--mono); font-size: 12px; outline: none; text-align: center;
+  }
+  .sim-machine-select {
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text); border-radius: 6px; padding: 6px 10px;
+    font-family: var(--mono); font-size: 12px; outline: none; cursor: pointer;
+  }
+
+  /* ─── Empty state ────────────────────────────────────────────────── */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text-mute);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-title { font-family: var(--display); font-size: 22px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 8px; }
+  .empty-sub { font-size: 12px; }
+
+  /* ─── Export history ─────────────────────────────────────────────── */
+  .export-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .export-row:last-child { border-bottom: none; }
+  .export-filename { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .export-size { font-size: 11px; color: var(--text-mute); }
+
+  /* ─── Scrollbar ──────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ─── Nav tabs ───────────────────────────────────────────────────── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 24px; }
+  .tab-btn {
+    padding: 8px 18px; border-radius: 7px; border: 1px solid transparent;
+    font-family: var(--sans); font-size: 12px; font-weight: 600;
+    cursor: pointer; color: var(--text-dim); background: transparent;
+    letter-spacing: 0.5px; transition: all 0.15s; text-transform: uppercase;
+  }
+  .tab-btn.active { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<!-- ─── HEADER ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚙️</div>
+    <div>
+      <div class="logo-text">FRIDAIL</div>
+      <span class="logo-sub">Downtime Tracker</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div>
+      <div class="live-clock" id="clock">--:--:--</div>
+      <div class="date-str" id="dateStr">---</div>
+    </div>
+    <div class="status-pill ok" id="machineStatus" onclick="window.app.refreshData()">
+      <div class="dot"></div>
+      <span id="statusText">RUNNING</span>
+    </div>
+  </div>
+</header>
+
+<!-- ─── MAIN ───────────────────────────────────────────────────────────────── -->
+<div class="container">
+
+  <!-- Active stop banner -->
+  <div class="active-banner" id="activeBanner">
+    <div class="banner-left">
+      <div class="banner-icon">🚨</div>
+      <div>
+        <div class="banner-title">MACHINE FAILURE IN PROGRESS</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Started at <span id="bannerStart" style="font-family:var(--mono)"></span></div>
+      </div>
+    </div>
+    <div class="banner-time" id="elapsedTimer">00:00</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card red">
+      <div class="stat-label">Total Stops</div>
+      <div class="stat-value" id="statTotal">0</div>
+      <div class="stat-sub">today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Downtime</div>
+      <div class="stat-value" id="statDowntime">0m</div>
+      <div class="stat-sub" id="statDowntimeSub">accumulated</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-label">Microstops</div>
+      <div class="stat-value blue" id="statMicro">0</div>
+      <div class="stat-sub">≤1 min each</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Classified</div>
+      <div class="stat-value green" id="statDone">0</div>
+      <div class="stat-sub" id="statPendingSub">0 pending</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab(event, 'stops')">Stops Log</button>
+    <button class="tab-btn" onclick="switchTab(event, 'causes')">Manage Causes</button>
+    <button class="tab-btn" onclick="switchTab(event, 'exports')">Export History</button>
+    <button class="tab-btn" onclick="switchTab(event, 'simulator')">Simulator</button>
+  </div>
+
+  <!-- TAB: Stops -->
+  <div class="tab-pane active" id="tab-stops">
+    <div class="section-header">
+      <div class="section-title">TODAY'S STOPS</div>
+      <div class="section-badge" id="todayDate">—</div>
+    </div>
+
+    <div class="table-wrap" id="tableWrap">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">NO STOPS RECORDED</div>
+        <div class="empty-sub">Machine is running. Stops will appear here automatically when the sensor reports a failure.</div>
+      </div>
+      <table id="stopsTable" style="display:none">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Duration</th>
+            <th>Location</th>
+            <th>Cause</th>
+            <th>Type</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="stopsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="actions-bar">
+      <div class="pending-note">
+        <span id="pendingCount">0</span> stops need classification before export
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <button class="btn btn-ghost" onclick="window.app.refreshData()">↻ Refresh</button>
+        <button class="btn btn-primary" id="submitBtn" onclick="window.app.submitDay()">
+          ⬇ Export to Excel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Causes -->
+  <div class="tab-pane" id="tab-causes">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div>
+        <div class="section-title" style="margin-bottom:16px">CAUSES LIST</div>
+        <div class="tag-list" id="causesTags"></div>
+        <div class="add-row">
+          <input class="input-field" id="newCauseInput" placeholder="Add new cause..." onkeydown="if(event.key==='Enter')window.app.addCause()">
+          <button class="btn btn-primary" onclick="window.app.addCause()">Add</button>
+        </div>
+      </div>
+      <div>
+        <div class="section-title" style="margin-bottom:16px">LOCATIONS LIST</div>
+        <div class="tag-list" id="locationsTags"></div>
+        <div class="add-row">
+          <input class="input-field" id="newLocationInput" placeholder="Add new location..." onkeydown="if(event.key==='Enter')window.app.addLocation()">
+          <button class="btn btn-primary" onclick="window.app.addLocation()">Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="window.app.saveCauses()">💾 Save Changes</button>
+    </div>
+  </div>
+
+  <!-- TAB: Exports -->
+  <div class="tab-pane" id="tab-exports">
+    <div class="section-header">
+      <div class="section-title">EXPORT HISTORY</div>
+      <button class="btn btn-ghost" onclick="window.app.loadExports()">↻ Refresh</button>
+    </div>
+    <div class="table-wrap" id="exportsWrap">
+      <div class="empty-state">
+        <div class="empty-icon">📁</div>
+        <div class="empty-title">NO EXPORTS YET</div>
+        <div class="empty-sub">Daily reports will appear here after submission.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Simulator -->
+  <div class="tab-pane" id="tab-simulator">
+    <div class="section-title" style="margin-bottom:8px">SENSOR SIMULATOR</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:24px">
+      Use this panel to simulate ESP/sensor events for testing — replace with real hardware calls to <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--mono)">/api/sensor/failure-start</code> and <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-family:var(--mono)">/api/sensor/failure-end</code>
+    </div>
+    <div class="sim-panel">
+      <div class="sim-panel-header">
+        <div class="sim-label">🔬 Simulate Stop</div>
+      </div>
+      <div class="sim-actions">
+        <select id="simMachine" class="sim-machine-select">
+          <option value="M1">Machine 1</option>
+          <option value="M2">Machine 2</option>
+          <option value="M3">Machine 3</option>
+          <option value="M4">Machine 4</option>
+          <option value="M5">Machine 5</option>
+        </select>
+        <button class="btn btn-sim" onclick="window.app.simStart()">▶ Failure START</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="btn btn-sim" onclick="window.app.simEnd()">■ Failure END</button>
+          <span style="font-size:11px;color:var(--text-mute)">after</span>
+          <input class="sim-min-input" id="simMinutes" type="number" placeholder="auto" min="0" step="1" max="480">
+          <span style="font-size:11px;color:var(--text-mute)">min</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-bottom:12px;margin-top:28px">API REFERENCE</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th><th>Body</th></tr></thead>
+        <tbody>
+          <tr><td class="mono" style="color:var(--green)">POST</td><td class="mono">/api/sensor/failure-start</td><td>Sensor reports failure began</td><td class="mono" style="font-size:11px;color:var(--text-dim)">{machine_id, timestamp?}</td></tr>
+          <tr><td class="mono" style="color:var(--red)">POST</td><td class="mono">/api/sensor/failure-end</td><td>Sensor reports failure resolved</td><td class="mono" style="font-size:11px;color:var(--text-dim)">{stop_id?, machine_id, timestamp?}</td></tr>
+          <tr><td class="mono" style="color:var(--blue)">GET</td><td class="mono">/api/stops</td><td>Get today's stops + summary</td><td class="mono" style="font-size:11px;color:var(--text-dim)">—</td></tr>
+          <tr><td class="mono" style="color:var(--accent)">PATCH</td><td class="mono">/api/stops/:id</td><td>Update cause / location</td><td class="mono" style="font-size:11px;color:var(--text-dim)">{cause, location}</td></tr>
+          <tr><td class="mono" style="color:var(--green)">POST</td><td class="mono">/api/submit</td><td>Export today to Excel</td><td class="mono" style="font-size:11px;color:var(--text-dim)">—</td></tr>
+          <tr><td class="mono" style="color:var(--blue)">GET</td><td class="mono">/api/causes</td><td>Get causes & locations lists</td><td class="mono" style="font-size:11px;color:var(--text-dim)">—</td></tr>
+          <tr><td class="mono" style="color:var(--accent)">PUT</td><td class="mono">/api/causes</td><td>Update causes & locations</td><td class="mono" style="font-size:11px;color:var(--text-dim)">{causes[], locations[]}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TOAST ───────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+// ─── App State ──────────────────────────────────────────────────────────────
+const API = '';
+let stops = [], causes = [], locations = [], activeStopStart = null, elapsedInterval = null;
+
+// ─── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB');
+  document.getElementById('dateStr').textContent = now.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' }).toUpperCase();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+  el.className = 'show ' + type;
+  setTimeout(() => el.className = '', 3000);
+}
+
+// ─── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(evt, name) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  evt.currentTarget.classList.add('active');
+  if (name === 'exports') window.app.loadExports();
+  if (name === 'causes') window.app.loadCauses();
+}
+
+// ─── Elapsed timer ──────────────────────────────────────────────────────────
+function startElapsed(startTimeStr) {
+  if (elapsedInterval) clearInterval(elapsedInterval);
+  const [sh, sm] = startTimeStr.split(':').map(Number);
+  const startMs = (sh * 60 + sm) * 60 * 1000;
+  function update() {
+    const now = new Date();
+    const nowMs = (now.getHours() * 60 + now.getMinutes()) * 60 * 1000 + now.getSeconds() * 1000;
+    const diff = Math.max(0, nowMs - startMs);
+    const s = Math.floor(diff / 1000) % 60;
+    const m = Math.floor(diff / 60000) % 60;
+    const h = Math.floor(diff / 3600000);
+    const str = h > 0 ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    document.getElementById('elapsedTimer').textContent = str;
+  }
+  update();
+  elapsedInterval = setInterval(update, 1000);
+}
+
+function stopElapsed() {
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+}
+
+// ─── Render ──────────────────────────────────────────────────────────────────
+function renderStops(data) {
+  const { stops: s, summary, date } = data;
+  stops = s;
+
+  // Stats
+  document.getElementById('statTotal').textContent = summary.total;
+  document.getElementById('statDowntime').textContent = summary.totalFormatted || '0m';
+  document.getElementById('statMicro').textContent = s.filter(x => x.isMicrostop).length;
+  const done = s.filter(x => x.status === 'done').length;
+  const pending = summary.pending;
+  document.getElementById('statDone').textContent = done;
+  document.getElementById('statPendingSub').textContent = pending + ' pending';
+  document.getElementById('pendingCount').textContent = pending;
+  document.getElementById('todayDate').textContent = date;
+
+  // Active stop
+  const active = s.find(x => x.status === 'active');
+  const banner = document.getElementById('activeBanner');
+  const statusPill = document.getElementById('machineStatus');
+  const statusText = document.getElementById('statusText');
+
+  if (active) {
+    banner.classList.add('visible');
+    document.getElementById('bannerStart').textContent = active.start;
+    startElapsed(active.start);
+    statusPill.className = 'status-pill alarm';
+    statusText.textContent = 'FAILURE';
+  } else {
+    banner.classList.remove('visible');
+    stopElapsed();
+    statusPill.className = 'status-pill ok';
+    statusText.textContent = 'RUNNING';
+  }
+
+  // Table
+  const tbody = document.getElementById('stopsBody');
+  const table = document.getElementById('stopsTable');
+  const empty = document.getElementById('emptyState');
+  const completed = s.filter(x => x.end !== null);
+
+  if (completed.length === 0) {
+    table.style.display = 'none';
+    empty.style.display = 'block';
+  } else {
+    table.style.display = 'table';
+    empty.style.display = 'none';
+    tbody.innerHTML = completed.map((stop, i) => {
+      const isEditable = stop.status === 'pending';
+      const locOpts = locations.map(l => `<option value="${l}" ${stop.location===l?'selected':''}>${l}</option>`).join('');
+      const causeOpts = causes.map(c => `<option value="${c}" ${stop.cause===c?'selected':''}>${c}</option>`).join('');
+
+      let badge = '';
+      if (stop.status === 'active') badge = `<span class="badge active"><div class="dot-small"></div> ACTIVE</span>`;
+      else if (stop.isMicrostop) badge = `<span class="badge micro">MICRO</span>`;
+      else if (stop.status === 'pending') badge = `<span class="badge pending">PENDING</span>`;
+      else badge = `<span class="badge done">✓ DONE</span>`;
+
+      return `<tr>
+        <td class="mono" style="color:var(--text-mute)">${i+1}</td>
+        <td class="mono">${stop.start}</td>
+        <td class="mono">${stop.end || '—'}</td>
+        <td class="mono" style="color:${stop.durationMinutes>10?'var(--red)':stop.durationMinutes>3?'var(--accent)':'var(--text)'}">${stop.duration || '—'}</td>
+        <td>
+          ${isEditable
+            ? `<select class="cause-select" onchange="window.app.updateStop('${stop.id}','location',this.value)"><option value="">— Select —</option>${locOpts}</select>`
+            : `<span style="color:var(--text-dim)">${stop.location || '—'}</span>`}
+        </td>
+        <td>
+          ${isEditable
+            ? `<select class="cause-select" onchange="window.app.updateStop('${stop.id}','cause',this.value)"><option value="">— Select —</option>${causeOpts}</select>`
+            : `<span style="color:var(--text-dim);font-size:12px">${stop.cause || '—'}</span>`}
+        </td>
+        <td>${stop.isMicrostop ? `<span style="color:var(--blue);font-size:11px">microstop</span>` : `<span style="color:var(--text-dim);font-size:11px">stop</span>`}</td>
+        <td>${badge}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+function renderCauseTags(list, containerId, removeCallback) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = list.map((item, i) => `
+    <div class="tag">
+      <span>${item}</span>
+      <button class="tag-remove" onclick="${removeCallback}(${i})">×</button>
+    </div>`).join('');
+}
+
+// ─── App Actions ─────────────────────────────────────────────────────────────
+window.app = {
+  async refreshData() {
+    try {
+      const [stopsRes, causesRes] = await Promise.all([
+        fetch(API + '/api/stops'),
+        fetch(API + '/api/causes')
+      ]);
+      const stopsData = await stopsRes.json();
+      const causesData = await causesRes.json();
+      causes = causesData.causes || [];
+      locations = causesData.locations || [];
+      renderStops(stopsData);
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  async updateStop(id, field, value) {
+    const body = {};
+    body[field] = value;
+    try {
+      await fetch(API + '/api/stops/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      await this.refreshData();
+    } catch (e) { toast('Failed to update', 'error'); }
+  },
+
+  async submitDay() {
+    const pendingCount = stops.filter(s => s.status === 'pending').length;
+    if (pendingCount > 0) {
+      if (!confirm(`${pendingCount} stop(s) still need classification. Export anyway?`)) return;
+    }
+    if (!confirm('Export today\'s downtime report to Excel?')) return;
+    try {
+      const res = await fetch(API + '/api/submit', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast(`Exported ${data.totalStops} stops → ${data.filename}`);
+      const a = document.createElement('a');
+      a.href = `/api/download/${data.filename}`;
+      a.download = data.filename;
+      a.click();
+    } catch (e) { toast(e.message, 'error'); }
+  },
+
+  async loadCauses() {
+    const data = await (await fetch(API + '/api/causes')).json();
+    causes = data.causes || [];
+    locations = data.locations || [];
+    renderCauseTags(causes, 'causesTags', 'window.app.removeCause');
+    renderCauseTags(locations, 'locationsTags', 'window.app.removeLocation');
+  },
+
+  addCause() {
+    const input = document.getElementById('newCauseInput');
+    const val = input.value.trim();
+    if (!val) return;
+    causes.push(val); input.value = '';
+    renderCauseTags(causes, 'causesTags', 'window.app.removeCause');
+  },
+
+  removeCause(i) {
+    causes.splice(i, 1);
+    renderCauseTags(causes, 'causesTags', 'window.app.removeCause');
+  },
+
+  addLocation() {
+    const input = document.getElementById('newLocationInput');
+    const val = input.value.trim();
+    if (!val) return;
+    locations.push(val); input.value = '';
+    renderCauseTags(locations, 'locationsTags', 'window.app.removeLocation');
+  },
+
+  removeLocation(i) {
+    locations.splice(i, 1);
+    renderCauseTags(locations, 'locationsTags', 'window.app.removeLocation');
+  },
+
+  async saveCauses() {
+    try {
+      await fetch(API + '/api/causes', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ causes, locations }) });
+      toast('Causes & locations saved');
+    } catch (e) { toast('Failed to save', 'error'); }
+  },
+
+  async loadExports() {
+    const data = await (await fetch(API + '/api/exports')).json();
+    const wrap = document.getElementById('exportsWrap');
+    if (!data.exports.length) {
+      wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-title">NO EXPORTS YET</div><div class="empty-sub">Daily reports will appear here after submission.</div></div>`;
+      return;
+    }
+    wrap.innerHTML = data.exports.map(f => `
+      <div class="export-row">
+        <div>
+          <div class="export-filename">${f.filename}</div>
+          <div class="export-size">${(f.size/1024).toFixed(1)} KB</div>
+        </div>
+        <a href="/api/download/${f.filename}" download class="btn btn-ghost" style="font-size:12px">⬇ Download</a>
+      </div>`).join('');
+  },
+
+  async simStart() {
+    const machine_id = document.getElementById('simMachine').value;
+    const res = await fetch(API + '/api/simulate/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ machine_id }) });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        toast(`${machine_id} already has an active stop`, 'error');
+        await this.refreshData();
+        return;
+      }
+      toast(d.error || 'Failed to start simulation', 'error');
+      return;
+    }
+    toast(`Simulated: failure started (${machine_id})`);
+    await this.refreshData();
+  },
+
+  async simEnd() {
+    const machine_id = document.getElementById('simMachine').value;
+    const minutesInput = document.getElementById('simMinutes').value.trim();
+    const payload = { machine_id };
+    if (minutesInput !== '') payload.minutes = Number(minutesInput);
+    const res = await fetch(API + '/api/simulate/end', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (!res.ok) { toast(`No active stop for ${machine_id}`, 'error'); return; }
+    if (payload.minutes !== undefined) toast(`Simulated: failure ended (${machine_id}, ${payload.minutes} min)`);
+    else toast(`Simulated: failure ended (${machine_id}, auto)`);
+    await this.refreshData();
+  }
+};
+
+// ─── Auto-refresh every 10s ──────────────────────────────────────────────────
+window.app.refreshData();
+setInterval(() => window.app.refreshData(), 10000);
+</script>
+</body>
+</html>
