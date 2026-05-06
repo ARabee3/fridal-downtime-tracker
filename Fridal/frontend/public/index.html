@@ -675,8 +675,8 @@ function switchTab(evt, name) {
 // ─── Elapsed timer ──────────────────────────────────────────────────────────
 function startElapsed(startTimeStr) {
   if (elapsedInterval) clearInterval(elapsedInterval);
-  const [sh, sm] = startTimeStr.split(':').map(Number);
-  const startMs = (sh * 60 + sm) * 60 * 1000;
+  const [sh, sm, ss = 0] = startTimeStr.split(':').map(Number);
+  const startMs = ((sh * 60 + sm) * 60 + ss) * 1000;
   function update() {
     const now = new Date();
     const nowMs = (now.getHours() * 60 + now.getMinutes()) * 60 * 1000 + now.getSeconds() * 1000;
@@ -702,7 +702,7 @@ function renderStops(data) {
 
   // Stats
   document.getElementById('statTotal').textContent = summary.total;
-  document.getElementById('statDowntime').textContent = summary.totalFormatted || '0m';
+  document.getElementById('statDowntime').textContent = summary.totalFormatted || '0s';
   document.getElementById('statMicro').textContent = s.filter(x => x.isMicrostop).length;
   const done = s.filter(x => x.status === 'done').length;
   const pending = summary.pending;
@@ -753,11 +753,13 @@ function renderStops(data) {
       else if (stop.status === 'pending') badge = `<span class="badge pending">PENDING</span>`;
       else badge = `<span class="badge done">✓ DONE</span>`;
 
+      const durationSeconds = stop.durationSeconds ?? Math.round((stop.durationMinutes || 0) * 60);
+
       return `<tr>
         <td class="mono" style="color:var(--text-mute)">${i+1}</td>
         <td class="mono">${stop.start}</td>
         <td class="mono">${stop.end || '—'}</td>
-        <td class="mono" style="color:${stop.durationMinutes>10?'var(--red)':stop.durationMinutes>3?'var(--accent)':'var(--text)'}">${stop.duration || '—'}</td>
+        <td class="mono" style="color:${durationSeconds>600?'var(--red)':durationSeconds>180?'var(--accent)':'var(--text)'}">${stop.duration || '—'}</td>
         <td>
           ${isEditable
             ? `<select class="cause-select" onchange="window.app.updateStop('${stop.id}','location',this.value)"><option value="">— Select —</option>${locOpts}</select>`

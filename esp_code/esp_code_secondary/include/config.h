@@ -3,7 +3,7 @@
 // --- Pin and hardware config ---
 // The GPIO pin connected to the IR sensor output.
 // Change this to match your wiring.
-#define IR_PIN 4
+#define IR_PIN 18
 
 // Polarity of the IR sensor output:
 // - set to 1 (true) if the sensor reads HIGH when an object is present

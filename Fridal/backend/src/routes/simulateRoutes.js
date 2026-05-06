@@ -28,7 +28,7 @@ router.post('/start', (req, res) => {
   const stop = {
     id: uuidv4(), machine_id, start: getCurrentTimeStr(new Date(startTimestamp)),
     startTimestamp,
-    end: null, duration: null, durationMinutes: null,
+    end: null, duration: null, durationMinutes: null, durationSeconds: null,
     cause: '', location: '', isMicrostop: false, status: 'active', date: today
   };
   data.stops.push(stop);
@@ -45,21 +45,22 @@ router.post('/end', (req, res) => {
   const requestedMinutes = Number(req.body.minutes);
 
   let endTimestamp = Date.now();
-  let durationMinutes;
+  let durationSeconds;
 
   if (Number.isFinite(requestedMinutes) && requestedMinutes > 0) {
-    durationMinutes = Math.round(requestedMinutes);
-    endTimestamp = startTimestamp + durationMinutes * 60 * 1000;
+    durationSeconds = Math.round(requestedMinutes * 60);
+    endTimestamp = startTimestamp + durationSeconds * 1000;
   } else {
     const elapsedMs = Math.max(0, endTimestamp - startTimestamp);
-    durationMinutes = Math.round(elapsedMs / 60000);
+    durationSeconds = Math.round(elapsedMs / 1000);
   }
 
   stop.end = getCurrentTimeStr(new Date(endTimestamp));
   stop.endTimestamp = endTimestamp;
-  stop.duration = formatDuration(durationMinutes);
-  stop.durationMinutes = durationMinutes;
-  stop.isMicrostop = durationMinutes <= config.microstopThreshold;
+  stop.duration = formatDuration(durationSeconds);
+  stop.durationMinutes = durationSeconds / 60;
+  stop.durationSeconds = durationSeconds;
+  stop.isMicrostop = durationSeconds <= (config.microstopThreshold * 60);
   stop.status = stop.isMicrostop ? 'done' : 'pending';
   if (stop.isMicrostop) { stop.cause = 'Microstop'; stop.location = '-'; }
   saveData(data);

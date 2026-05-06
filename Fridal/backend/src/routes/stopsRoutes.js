@@ -21,7 +21,7 @@ router.get('/', (req, res) => {
   }
 
   const stops = data.stops.filter(s => s.date === today);
-  const totalMinutes = stops.filter(s => s.durationMinutes).reduce((sum, s) => sum + s.durationMinutes, 0);
+  const totalSeconds = stops.reduce((sum, s) => sum + (s.durationSeconds ?? Math.round((s.durationMinutes || 0) * 60)), 0);
   const pending = stops.filter(s => s.status === 'pending').length;
 
   res.json({
@@ -29,8 +29,9 @@ router.get('/', (req, res) => {
     date: today,
     summary: {
       total: stops.length,
-      totalMinutes,
-      totalFormatted: formatDuration(totalMinutes),
+      totalMinutes: totalSeconds / 60,
+      totalSeconds,
+      totalFormatted: formatDuration(totalSeconds),
       pending,
       active: stops.filter(s => s.status === 'active').length
     }
@@ -68,7 +69,7 @@ router.post('/submit', (req, res) => {
     'Start Time': s.start,
     'End Time': s.end || '-',
     'Duration': s.duration || '-',
-    'Duration (min)': s.durationMinutes || 0,
+    'Duration (sec)': s.durationSeconds ?? Math.round((s.durationMinutes || 0) * 60),
     'Location': s.location || '-',
     'Cause': s.cause || '-',
     'Type': s.isMicrostop ? 'Microstop' : 'Stop',
@@ -83,7 +84,7 @@ router.post('/submit', (req, res) => {
 
   XLSX.utils.book_append_sheet(wb, ws, 'Downtime Log');
 
-  const totalMinutes = stops.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+  const totalSeconds = stops.reduce((sum, s) => sum + (s.durationSeconds ?? Math.round((s.durationMinutes || 0) * 60)), 0);
   const microstops = stops.filter(s => s.isMicrostop);
   const regularStops = stops.filter(s => !s.isMicrostop);
 
@@ -92,7 +93,7 @@ router.post('/submit', (req, res) => {
     const key = s.cause || 'Unclassified';
     if (!causeGroups[key]) causeGroups[key] = { count: 0, minutes: 0 };
     causeGroups[key].count++;
-    causeGroups[key].minutes += s.durationMinutes || 0;
+    causeGroups[key].minutes += (s.durationSeconds ?? Math.round((s.durationMinutes || 0) * 60));
   });
 
   const summaryRows = [
@@ -100,8 +101,8 @@ router.post('/submit', (req, res) => {
     { 'Metric': 'Total Stops', 'Value': stops.length },
     { 'Metric': 'Regular Stops', 'Value': regularStops.length },
     { 'Metric': 'Microstops (≤1 min)', 'Value': microstops.length },
-    { 'Metric': 'Total Downtime', 'Value': formatDuration(totalMinutes) },
-    { 'Metric': 'Total Downtime (min)', 'Value': totalMinutes },
+    { 'Metric': 'Total Downtime', 'Value': formatDuration(totalSeconds) },
+    { 'Metric': 'Total Downtime (sec)', 'Value': totalSeconds },
     { 'Metric': '', 'Value': '' },
     { 'Metric': '--- By Cause ---', 'Value': '' },
     ...Object.entries(causeGroups).map(([cause, d]) => ({

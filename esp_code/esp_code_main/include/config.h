@@ -2,7 +2,7 @@
 
 // ========== PIN and HARDWARE CONFIG ==========
 // GPIO pin connected to the current sensor output
-#define CURRENT_SENSOR_PIN 5
+#define CURRENT_SENSOR_PIN 18
 
 // Polarity of the current sensor:
 // set to 1 (true) if sensor reads HIGH when fault detected

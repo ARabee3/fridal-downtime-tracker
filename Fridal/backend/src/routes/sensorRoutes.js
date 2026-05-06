@@ -37,6 +37,7 @@ router.post('/failure-start', (req, res) => {
     end: null,
     duration: null,
     durationMinutes: null,
+    durationSeconds: null,
     cause: '',
     location: '',
     isMicrostop: false,
@@ -67,11 +68,12 @@ router.post('/failure-end', (req, res) => {
     return res.status(404).json({ error: 'No active stop found' });
   }
 
-  const durationMinutes = parseDuration(stop.start, endTime);
+  const durationSeconds = parseDuration(stop.start, endTime);
   stop.end = endTime;
-  stop.duration = formatDuration(durationMinutes);
-  stop.durationMinutes = durationMinutes;
-  stop.isMicrostop = durationMinutes <= config.microstopThreshold;
+  stop.duration = formatDuration(durationSeconds);
+  stop.durationMinutes = durationSeconds / 60;
+  stop.durationSeconds = durationSeconds;
+  stop.isMicrostop = durationSeconds <= (config.microstopThreshold * 60);
   stop.status = 'pending';
 
   if (stop.isMicrostop) {
