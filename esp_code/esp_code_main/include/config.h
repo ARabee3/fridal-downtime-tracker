@@ -19,7 +19,7 @@
 
 // ========== SERVER CONFIG ==========
 // IP or hostname of the Fridal backend server
-#define SERVER_HOST "192.168.223.249"
+#define SERVER_HOST "192.168.50.249"
 #define SERVER_PORT 3000
 #define SERVER_API_PATH "/api/sensor"
 
@@ -34,7 +34,8 @@
 // ========== ESP-NOW CONFIG ==========
 // The MAC address of the secondary ESP (the IR node).
 // Replace with the actual MAC of your secondary board.
-#define SECONDARY_PEER_MAC {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+//  00:70:07:82:CB:18
+#define SECONDARY_PEER_MAC {0x00, 0x70, 0x07, 0x82, 0xCB, 0x18}
 
 // ========== DEBUG ==========
 // Set to 1 to enable verbose debug output on Serial

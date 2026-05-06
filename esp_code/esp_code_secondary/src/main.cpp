@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include "../include/config.h"
 #include "IRSensor.h"
 #include "EspNowDriver.h"
@@ -24,6 +25,30 @@ PRINT_DEBUG("Secondary ESP (IR) starting...\n");
 
   // Initialize the IR sensor driver (configures pin, samples initial state)
   ir.begin();
+
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  PRINT_DEBUG("SECONDARY ESP MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  PRINT_DEBUG("Config format: {0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X}\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+  // Connect to WiFi to sync on the same channel as main ESP
+  PRINT_DEBUG("Connecting to WiFi: %s\n", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
+  int attempts = 0;
+  const int maxAttempts = 20;
+  while (WiFi.status() != WL_CONNECTED && attempts < maxAttempts) {
+    delay(500);
+    PRINT_DEBUG(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    PRINT_DEBUG("\nWiFi connected! Channel: %d\n", WiFi.channel());
+  } else {
+    PRINT_DEBUG("\nWiFi connection failed (ESP-NOW may not work)\n");
+  }
 
   // Initialize ESP-NOW and try to add the main peer (for direct sends)
   if (!comms.begin(MAIN_MAC)) {

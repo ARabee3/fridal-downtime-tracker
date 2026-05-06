@@ -1,4 +1,4 @@
-#include "CurrentSensor.h"
+#include "../include/CurrentSensor.h"
 #include "../include/config.h"
 
 // Constructor: store configuration, leave runtime variables initialized

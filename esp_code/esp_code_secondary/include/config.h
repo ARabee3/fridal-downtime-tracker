@@ -25,6 +25,10 @@
 // Example: {0x24,0x6F,0x28,0xAA,0xBB,0xCC}
 #define MAIN_PEER_MAC {0x00, 0x70, 0x07, 0x82, 0xCA, 0x34}
 
+// WiFi credentials (to sync on the same channel as main ESP)
+#define WIFI_SSID "Redmi Note 8 Pro2"
+#define WIFI_PASSWORD "@12345678@"
+
 // Enable verbose debug printing to Serial when set to 1. Useful while testing.
 #define BOARD_DEBUG 1
 

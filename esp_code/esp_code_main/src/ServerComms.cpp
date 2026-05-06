@@ -1,4 +1,4 @@
-#include "ServerComms.h"
+#include "../include/ServerComms.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include "../include/config.h"
@@ -97,5 +97,5 @@ bool ServerComms::sendFailureStop(const char *machineId) {
   Serial.printf("[ServerComms] Sending failure STOP: %s\n", payload);
   #endif
 
-  return _sendRequest("failure-stop", payload);
+  return _sendRequest("failure-end", payload);
 }

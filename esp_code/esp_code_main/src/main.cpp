@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include "../include/config.h"
 #include "CurrentSensor.h"
 #include "EspNowDriver.h"
@@ -28,12 +29,20 @@ void setup() {
   currentSensor.begin();
   #if BOARD_DEBUG
   Serial.println("Current sensor initialized");
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  Serial.printf("MAIN ESP MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  Serial.printf("Config format: {0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X}\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   #endif
 
   // Connect to WiFi
   if (!server.connectWiFi(WIFI_SSID, WIFI_PASSWORD)) {
     #if BOARD_DEBUG
     Serial.println("ERROR: WiFi connection failed");
+    #endif
+  } else {
+    #if BOARD_DEBUG
+    Serial.printf("WiFi channel: %d\n", WiFi.channel());
     #endif
   }
 
@@ -62,28 +71,39 @@ void setup() {
 }
 
 void loop() {
+  static unsigned long loopCount = 0;
+  loopCount++;
+
+  // Immediate heartbeat to confirm loop continues
+  Serial.flush();
+
   // Update the current sensor
   currentSensor.update();
   bool currentFault = currentSensor.isFault();
-
   // Get the latest IR state from ESP-NOW (updated via callback)
   int irState = espNow.getLastIrState();
   int irIdle = espNow.getLastIrIdle();
-
   // Determine overall failure condition:
   // Failure occurs if:
   //   - Current sensor detects a fault, OR
   //   - IR sensor has been idle (no bottle detection for 30+ seconds)
   bool shouldFail = currentFault || (irIdle == 1);
 
-  #if BOARD_DEBUG
-  static unsigned long lastDebug = 0;
-  if (millis() - lastDebug > 5000) {
-    lastDebug = millis();
-    Serial.printf("Current: %d | IR State: %d | IR Idle: %d | Should Fail: %d | Active: %d\n",
-                  currentFault ? 1 : 0, irState, irIdle, shouldFail ? 1 : 0, failureActive ? 1 : 0);
+  // Print continuous status every 100ms (non-blocking)
+  static unsigned long lastStatus = 0;
+  static bool loopStarted = false;
+  
+  if (!loopStarted) {
+    Serial.println("[LOOP] Started, waiting for updates...");
+    loopStarted = true;
   }
-  #endif
+  
+  loopCount++;
+  if (millis() - lastStatus >= 1000) {
+    lastStatus = millis();
+    Serial.printf("Loop #%lu | Current: %d | IR State: %d | IR Idle: %d | Should Fail: %d | Active: %d\n",
+                loopCount, currentFault ? 1 : 0, irState, irIdle, shouldFail ? 1 : 0, failureActive ? 1 : 0);
+  }
 
   // State transition logic
   if (shouldFail && !failureActive) {
@@ -97,7 +117,7 @@ void loop() {
 
     // Send failure-start to server
     server.sendFailureStart(MACHINE_ID);
-
+    Serial.printf("[LOOP %lu] Sent failure start to server\n", loopCount);
   } else if (!shouldFail && failureActive) {
     // Transition: failure -> potential clear
     // Use debounce timer to avoid rapid on/off chatter
@@ -117,6 +137,7 @@ void loop() {
 
       // Send failure-stop to server
       server.sendFailureStop(MACHINE_ID);
+      Serial.printf("[LOOP %lu] Sent failure stop to server\n", loopCount);
     }
   } else {
     // No state change; reset debounce timer

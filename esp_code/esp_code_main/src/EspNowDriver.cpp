@@ -56,11 +56,15 @@ bool EspNowDriver::begin(const uint8_t secondaryMac[6]) {
   // Try to add the secondary peer to the peer list
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, secondaryMac, 6);
-  peer.channel = 0;
+  peer.channel = 0;  // 0 = flexible channel
   peer.encrypt = false;
   if (esp_now_add_peer(&peer) != ESP_OK) {
     #if BOARD_DEBUG
     Serial.println("Warning: failed to add secondary peer");
+    #endif
+  } else {
+    #if BOARD_DEBUG
+    Serial.println("Secondary peer added successfully");
     #endif
   }
   

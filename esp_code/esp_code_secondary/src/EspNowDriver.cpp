@@ -28,11 +28,13 @@ bool EspNowDriver::begin(const uint8_t peerMac[6]) {
   // Try to add the peer to the peer list so broadcasts are not required.
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, peerMac, 6);
-  peer.channel = 0;
+  peer.channel = 0;  // 0 = flexible/auto (secondary is now on same channel via WiFi)
   peer.encrypt = false;
   if (esp_now_add_peer(&peer) != ESP_OK) {
     // Warning: failure to add a peer is non-fatal; we can still send to broadcast
     PRINT_DEBUG("Warning: failed to add ESPNOW peer\n");
+  } else {
+    PRINT_DEBUG("ESPNOW peer added successfully\n");
   }
   return true;
 }

@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include "../include/config.h"
+#include <esp_system.h>
 
 static bool wifiReady = false;
 
@@ -58,6 +59,27 @@ static void connectWiFi() {
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  // Print local efuse MAC (works without connecting to WiFi)
+  uint8_t efuse_mac[6];
+  if (esp_read_mac(efuse_mac, ESP_MAC_WIFI_STA) == ESP_OK) {
+    char macbuf[18];
+    snprintf(macbuf, sizeof(macbuf), "%02X:%02X:%02X:%02X:%02X:%02X",
+             efuse_mac[0], efuse_mac[1], efuse_mac[2], efuse_mac[3], efuse_mac[4], efuse_mac[5]);
+    Serial.printf("Local MAC (efuse): %s\n", macbuf);
+  } else {
+    Serial.println("Local MAC: <error>");
+  }
+
+  // Print configured secondary peer MAC from config for reference (if present)
+#ifdef SECONDARY_PEER_MAC
+  const uint8_t cfg_mac[6] = SECONDARY_PEER_MAC;
+  Serial.printf("Configured SECONDARY_PEER_MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                cfg_mac[0], cfg_mac[1], cfg_mac[2], cfg_mac[3], cfg_mac[4], cfg_mac[5]);
+#else
+  Serial.println("Configured SECONDARY_PEER_MAC: <not defined>");
+#endif
+
 
   PRINT_DEBUG("\n=== Simple Endpoint Test ===\n");
   connectWiFi();
