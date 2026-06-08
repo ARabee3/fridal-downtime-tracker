@@ -147,6 +147,11 @@ static bool scanAndFindTarget(const char *targetSsid,
 // This is the core connect routine used by both connectWiFi and reconnectWiFi.
 // It does a scan, targets the best AP by BSSID+channel, disables power save,
 // and waits for connection with detailed status logging.
+//
+// KEY FIX: We use WiFi.begin() instead of raw esp_wifi_set_config()+esp_wifi_connect().
+// The raw API does NOT properly reset the radio state machine after a scan,
+// which causes AUTH_EXPIRE (reason 2) — the 802.11 auth frame exchange times
+// out because the radio is stuck in the wrong internal state.
 
 static bool doConnect(const char *ssid, const char *password,
                       bool doScan, int maxWaitSec) {
@@ -173,57 +178,32 @@ static bool doConnect(const char *ssid, const char *password,
     }
   }
 
-  // Small delay to let the radio settle after scanning
-  delay(200);
-
-  // Disconnect cleanly WITHOUT disabling the STA interface
-  WiFi.disconnect(false);
+  // ── Full STA teardown + re-init ──
+  // This is critical: WiFi.disconnect(true) tears down the STA interface
+  // completely, then WiFi.mode(WIFI_STA) re-initializes it cleanly.
+  // Without this, the radio can be stuck in a broken state after scanning.
+  WiFi.disconnect(true);   // disconnect + turn off STA
+  delay(100);
+  WiFi.mode(WIFI_STA);     // re-enable STA from scratch
   delay(100);
 
-  // ── Critical: disable long-range mode ──
+  // ── Disable long-range mode — use standard b/g/n ──
   esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
 
-  // ── Critical: disable power save (modem sleep) ──
-  // This prevents the ESP from missing AP beacons, which is the #1 cause
-  // of reason 4 (ASSOC_EXPIRE) and reason 6 (NOT_ASSOCED) disconnects.
+  // ── Disable power save (modem sleep) ──
   esp_wifi_set_ps(WIFI_PS_NONE);
 
-  // Build wifi_config with proper auth threshold and PMF settings
-  wifi_config_t conf;
-  memset(&conf, 0, sizeof(conf));
-
-  // Copy SSID (max 32 bytes) and password (max 64 bytes)
-  strncpy(reinterpret_cast<char*>(conf.sta.ssid), ssid, sizeof(conf.sta.ssid) - 1);
-  strncpy(reinterpret_cast<char*>(conf.sta.password), password, sizeof(conf.sta.password) - 1);
-
-  // Auth threshold: accept WPA2 or WPA3
-  conf.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-
-  // PMF: capable but not required (matches most consumer routers)
-  conf.sta.pmf_cfg.capable = true;
-  conf.sta.pmf_cfg.required = false;
-
-  // Target specific AP if scan found it
+  // ── Connect using Arduino WiFi.begin() ──
+  // WiFi.begin() properly handles the internal state machine, unlike raw
+  // esp_wifi_set_config() + esp_wifi_connect() which skips critical steps.
   if (haveBssid && targetChannel > 0) {
-    conf.sta.channel = targetChannel;
-    conf.sta.bssid_set = 1;
-    memcpy(conf.sta.bssid, targetBssid, 6);
     PRINT_DEBUG("[WiFi] Targeting BSSID %02X:%02X:%02X:%02X:%02X:%02X on ch %d\n",
                 targetBssid[0], targetBssid[1], targetBssid[2],
                 targetBssid[3], targetBssid[4], targetBssid[5], targetChannel);
-  }
-
-  // Apply config and start connection
-  esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &conf);
-  if (err != ESP_OK) {
-    PRINT_DEBUG("[WiFi] esp_wifi_set_config failed: %d\n", err);
-    return false;
-  }
-
-  err = esp_wifi_connect();
-  if (err != ESP_OK) {
-    PRINT_DEBUG("[WiFi] esp_wifi_connect failed: %d\n", err);
-    return false;
+    WiFi.begin(ssid, password, targetChannel, targetBssid, true);
+  } else {
+    PRINT_DEBUG("[WiFi] Connecting without BSSID lock\n");
+    WiFi.begin(ssid, password);
   }
 
   // Wait for connection with status monitoring
@@ -269,7 +249,8 @@ static bool doConnect(const char *ssid, const char *password,
                 s_lastDisconnectReason, disconnectReasonName(s_lastDisconnectReason));
 
     if (s_lastDisconnectReason == 2 || s_lastDisconnectReason == 202) {
-      PRINT_DEBUG("[WiFi] >>> AUTH_FAIL: Wrong password or MAC filtering. Check router settings.\n");
+      PRINT_DEBUG("[WiFi] >>> AUTH issue: Wrong password, MAC filter, or WPA3 mismatch.\n");
+      PRINT_DEBUG("[WiFi] >>> Try setting router to WPA2-PSK only (no WPA3).\n");
     } else if (s_lastDisconnectReason == 14 || s_lastDisconnectReason == 204) {
       PRINT_DEBUG("[WiFi] >>> HANDSHAKE_TIMEOUT: AP too slow or signal too weak.\n");
     } else if (s_lastDisconnectReason == 201) {
