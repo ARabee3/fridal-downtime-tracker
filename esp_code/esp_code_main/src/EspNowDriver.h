@@ -15,16 +15,8 @@ public:
   int getLastIrState() const { return _lastIrState; }
   int getLastIrIdle() const { return _lastIrIdle; }
 
-  unsigned long getLastRecvAge() const {
-    if (_lastRecvMillis == 0) return 0xFFFFFFFF;
-    unsigned long now = millis();
-    return (now >= _lastRecvMillis) ? (now - _lastRecvMillis) : 0;
-  }
-
-  bool hasValidData() const {
-    unsigned long age = getLastRecvAge();
-    return age < ESPNOW_STALE_MS;
-  }
+  unsigned long getLastRecvAge() const;
+  bool hasValidData() const;
 
 private:
   RecvCallback _onRecv;

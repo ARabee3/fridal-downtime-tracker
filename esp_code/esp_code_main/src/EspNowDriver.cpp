@@ -68,3 +68,14 @@ bool EspNowDriver::begin(const uint8_t secondaryMac[6]) {
 }
 
 void EspNowDriver::onRecv(RecvCallback cb) { _onRecv = cb; }
+
+unsigned long EspNowDriver::getLastRecvAge() const {
+  if (_lastRecvMillis == 0) return 0xFFFFFFFF;
+  unsigned long now = millis();
+  return (now >= _lastRecvMillis) ? (now - _lastRecvMillis) : 0;
+}
+
+bool EspNowDriver::hasValidData() const {
+  unsigned long age = getLastRecvAge();
+  return age < ESPNOW_STALE_MS;
+}
