@@ -25,7 +25,7 @@
 
 // WiFi credentials (must be same network as main ESP for ESP-NOW channel sync)
 #define WIFI_SSID "El-ott"
-#define WIFI_PASSWORD "C2@d9d0@yFF#*$"
+#define WIFI_PASSWORD "12345678"
 
 // Enable verbose debug printing to Serial when set to 1. Useful while testing.
 #define BOARD_DEBUG 1

@@ -15,7 +15,7 @@
 // ========== WiFi CONFIG ==========
 // Replace with your WiFi SSID and password
 #define WIFI_SSID "El-ott"
-#define WIFI_PASSWORD "C2@d9d0@yFF#*$"
+#define WIFI_PASSWORD "12345678"
 
 // ========== SERVER CONFIG ==========
 // IP of the laptop/PC running the backend server on the WiFi network.
