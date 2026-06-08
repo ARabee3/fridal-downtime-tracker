@@ -125,9 +125,144 @@
 
   /* Main */
   .container {
-    max-width: 600px;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 32px 24px;
+    padding: 28px 24px;
+  }
+
+  /* Stats */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.6;
+  }
+  .stat-card.red::before  { background: var(--red); }
+  .stat-card.green::before { background: var(--green); }
+  .stat-card.blue::before  { background: var(--blue); }
+  .stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px; }
+  .stat-value { font-family: var(--display); font-size: 40px; line-height: 1; color: var(--text); }
+  .stat-value.red   { color: var(--red); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.blue  { color: var(--blue); }
+  .stat-sub { font-size: 11px; color: var(--text-mute); margin-top: 6px; font-family: var(--mono); }
+
+  /* Section header */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: var(--text);
+  }
+  .section-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 3px 10px;
+    border-radius: 4px;
+  }
+
+  /* Table */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 28px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: var(--surface2);
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 12px 16px; font-size: 13px; }
+  tbody td.mono { font-family: var(--mono); font-size: 13px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 4px;
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1px;
+    border: 1px solid;
+  }
+  .badge.active  { background: var(--red-dim);   color: var(--red);   border-color: var(--red); }
+  .badge.pending { background: rgba(232,160,32,0.12); color: var(--accent); border-color: var(--accent); }
+  .badge.done    { background: var(--green-dim);  color: var(--green); border-color: var(--green); }
+  .badge.micro   { background: var(--blue-dim);   color: var(--blue);  border-color: var(--blue); }
+  .badge .dot-small { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .badge.active .dot-small { animation: blink 0.8s step-end infinite; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center; padding: 40px 20px; color: var(--text-mute);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-title { font-family: var(--display); font-size: 22px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 8px; }
+  .empty-sub { font-size: 12px; }
+
+  /* Selects in table */
+  .cause-select {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: var(--sans);
+    font-size: 12px;
+    cursor: pointer;
+    min-width: 180px;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b6560'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+  .cause-select:focus { border-color: var(--accent); }
+
+  /* Pending cards section divider */
+  .pending-section {
+    margin-top: 8px;
+    margin-bottom: 20px;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
   }
 
   /* Active banner */
@@ -340,6 +475,64 @@
     <div class="subtitle" style="margin-top:4px">Please wait for the failure to end before entering details.</div>
   </div>
 
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card red">
+      <div class="stat-label">Total Stops</div>
+      <div class="stat-value" id="statTotal">0</div>
+      <div class="stat-sub">today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Downtime</div>
+      <div class="stat-value" id="statDowntime">0m</div>
+      <div class="stat-sub" id="statDowntimeSub">accumulated</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-label">Microstops</div>
+      <div class="stat-value blue" id="statMicro">0</div>
+      <div class="stat-sub">≤1 min each</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Classified</div>
+      <div class="stat-value green" id="statDone">0</div>
+      <div class="stat-sub" id="statPendingSub">0 pending</div>
+    </div>
+  </div>
+
+  <!-- Stops Table -->
+  <div class="section-header">
+    <div class="section-title">TODAY'S STOPS</div>
+    <div class="section-badge" id="todayDate">—</div>
+  </div>
+  <div class="table-wrap" id="tableWrap">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">📊</div>
+      <div class="empty-title">NO STOPS RECORDED</div>
+      <div class="empty-sub">Machine is running. Stops will appear here automatically when the sensor reports a failure.</div>
+    </div>
+    <table id="stopsTable" style="display:none">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Duration</th>
+          <th>Location</th>
+          <th>Cause</th>
+          <th>Type</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="stopsBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Pending section divider -->
+  <div class="pending-section section-header" id="pendingHeader" style="display:none">
+    <div class="section-title">PENDING CLASSIFICATION</div>
+    <div class="section-badge" id="pendingBadge">—</div>
+  </div>
+
   <!-- Running normally -->
   <div class="running-state" id="runningState">
     <div class="icon">✅</div>
@@ -412,6 +605,61 @@ function render(data) {
   const active = stops.find(x => x.status === 'active');
   const pending = stops.filter(x => x.status === 'pending');
   const pendingIds = new Set(pending.map(p => p.id));
+  const summary = data.summary;
+  const date = data.date;
+
+  // ── Stats ──
+  document.getElementById('statTotal').textContent = summary.total;
+  document.getElementById('statDowntime').textContent = summary.totalFormatted || '0s';
+  document.getElementById('statMicro').textContent = stops.filter(x => x.isMicrostop).length;
+  const done = stops.filter(x => x.status === 'done').length;
+  document.getElementById('statDone').textContent = done;
+  document.getElementById('statPendingSub').textContent = summary.pending + ' pending';
+  document.getElementById('todayDate').textContent = date;
+
+  // ── Table ──
+  const tbody = document.getElementById('stopsBody');
+  const table = document.getElementById('stopsTable');
+  const empty = document.getElementById('emptyState');
+  const completed = stops.filter(x => x.end !== null).reverse();
+
+  if (completed.length === 0) {
+    table.style.display = 'none';
+    empty.style.display = 'block';
+  } else {
+    table.style.display = 'table';
+    empty.style.display = 'none';
+    tbody.innerHTML = completed.map((stop, i) => {
+      const durationSeconds = stop.durationSeconds ?? Math.round((stop.durationMinutes || 0) * 60);
+
+      let badge = '';
+      if (stop.status === 'active') badge = `<span class="badge active"><div class="dot-small"></div> ACTIVE</span>`;
+      else if (stop.isMicrostop) badge = `<span class="badge micro">MICRO</span>`;
+      else if (stop.status === 'pending') badge = `<span class="badge pending">PENDING</span>`;
+      else badge = `<span class="badge done">✓ DONE</span>`;
+
+      return `<tr>
+        <td class="mono" style="color:var(--text-mute)">${i+1}</td>
+        <td class="mono">${stop.start}</td>
+        <td class="mono">${stop.end || '—'}</td>
+        <td class="mono" style="color:${durationSeconds>600?'var(--red)':durationSeconds>180?'var(--accent)':'var(--text)'}">${stop.duration || '—'}</td>
+        <td style="color:var(--text-dim)">${stop.location || '—'}</td>
+        <td style="color:var(--text-dim);font-size:12px">${stop.cause || '—'}</td>
+        <td>${stop.isMicrostop ? `<span style="color:var(--blue);font-size:11px">microstop</span>` : `<span style="color:var(--text-dim);font-size:11px">stop</span>`}</td>
+        <td>${badge}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Pending header ──
+  const pendingHeader = document.getElementById('pendingHeader');
+  const pendingBadge = document.getElementById('pendingBadge');
+  if (pending.length > 0) {
+    pendingHeader.style.display = 'flex';
+    pendingBadge.textContent = pending.length + ' remaining';
+  } else {
+    pendingHeader.style.display = 'none';
+  }
 
   const banner = document.getElementById('activeBanner');
   const running = document.getElementById('runningState');

@@ -20,15 +20,5 @@
     "ماكينة - غسيل",
     "ماكينة - غسيل + adj"
   ],
-  "locations": [
-    "Filling Machine",
-    "Shrink Machine",
-    "Cap Machine",
-    "Label Machine",
-    "Carton Machine",
-    "Production Line",
-    "Quality Lab",
-    "Warehouse",
-    "Fawry"
-  ]
+  "locations": []
 }

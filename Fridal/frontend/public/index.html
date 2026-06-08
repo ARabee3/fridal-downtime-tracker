@@ -554,7 +554,10 @@
   <div class="tab-pane" id="tab-causes">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
       <div>
-        <div class="section-title" style="margin-bottom:16px">CAUSES LIST</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div class="section-title">CAUSES LIST</div>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="window.app.clearAllCauses()">Clear All</button>
+        </div>
         <div class="tag-list" id="causesTags"></div>
         <div class="add-row">
           <input class="input-field" id="newCauseInput" placeholder="Add new cause..." onkeydown="if(event.key==='Enter')window.app.addCause()">
@@ -562,7 +565,10 @@
         </div>
       </div>
       <div>
-        <div class="section-title" style="margin-bottom:16px">LOCATIONS LIST</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div class="section-title">LOCATIONS LIST</div>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="window.app.clearAllLocations()">Clear All</button>
+        </div>
         <div class="tag-list" id="locationsTags"></div>
         <div class="add-row">
           <input class="input-field" id="newLocationInput" placeholder="Add new location..." onkeydown="if(event.key==='Enter')window.app.addLocation()">
@@ -643,7 +649,7 @@
 <script>
 // ─── App State ──────────────────────────────────────────────────────────────
 const API = '';
-let stops = [], causes = [], locations = [], activeStopStart = null, elapsedInterval = null;
+let stops = [], causes = [], locations = [], editCauses = [], editLocations = [], activeStopStart = null, elapsedInterval = null;
 
 // ─── Clock ──────────────────────────────────────────────────────────────────
 function updateClock() {
@@ -788,7 +794,7 @@ function renderCauseTags(list, containerId, removeCallback) {
 
 // ─── App Actions ─────────────────────────────────────────────────────────────
 window.app = {
-  async refreshData() {
+  async loadInitial() {
     try {
       const [stopsRes, causesRes] = await Promise.all([
         fetch(API + '/api/stops'),
@@ -799,6 +805,15 @@ window.app = {
       causes = causesData.causes || [];
       locations = causesData.locations || [];
       renderStops(stopsData);
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  async refreshData() {
+    try {
+      const res = await fetch(API + '/api/stops');
+      renderStops(await res.json());
     } catch (e) {
       console.error(e);
     }
@@ -841,41 +856,58 @@ window.app = {
     const data = await (await fetch(API + '/api/causes')).json();
     causes = data.causes || [];
     locations = data.locations || [];
-    renderCauseTags(causes, 'causesTags', 'window.app.removeCause');
-    renderCauseTags(locations, 'locationsTags', 'window.app.removeLocation');
+    editCauses = [...causes];
+    editLocations = [...locations];
+    renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
+    renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
   },
 
   addCause() {
     const input = document.getElementById('newCauseInput');
     const val = input.value.trim();
     if (!val) return;
-    causes.push(val); input.value = '';
-    renderCauseTags(causes, 'causesTags', 'window.app.removeCause');
+    editCauses.push(val); input.value = '';
+    renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
   },
 
   removeCause(i) {
-    causes.splice(i, 1);
-    renderCauseTags(causes, 'causesTags', 'window.app.removeCause');
+    editCauses.splice(i, 1);
+    renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
   },
 
   addLocation() {
     const input = document.getElementById('newLocationInput');
     const val = input.value.trim();
     if (!val) return;
-    locations.push(val); input.value = '';
-    renderCauseTags(locations, 'locationsTags', 'window.app.removeLocation');
+    editLocations.push(val); input.value = '';
+    renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
   },
 
   removeLocation(i) {
-    locations.splice(i, 1);
-    renderCauseTags(locations, 'locationsTags', 'window.app.removeLocation');
+    editLocations.splice(i, 1);
+    renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
   },
 
   async saveCauses() {
     try {
-      await fetch(API + '/api/causes', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ causes, locations }) });
+      const res = await fetch(API + '/api/causes', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ causes: editCauses, locations: editLocations }) });
+      const data = await res.json();
+      causes = data.causes || editCauses;
+      locations = data.locations || editLocations;
+      renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
+      renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
       toast('Causes & locations saved');
     } catch (e) { toast('Failed to save', 'error'); }
+  },
+
+  clearAllCauses() {
+    editCauses = [];
+    renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
+  },
+
+  clearAllLocations() {
+    editLocations = [];
+    renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
   },
 
   async loadExports() {
@@ -926,7 +958,7 @@ window.app = {
 };
 
 // ─── Auto-refresh every 3s ──────────────────────────────────────────────────
-window.app.refreshData();
+window.app.loadInitial();
 setInterval(() => window.app.refreshData(), 3000);
 </script>
 </body>
