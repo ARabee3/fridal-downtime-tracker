@@ -143,70 +143,9 @@ static bool scanAndFindTarget(const char *targetSsid,
   return false;
 }
 
-// ─── Shared connection helper ───────────────────────────────────────────────
-// This is the core connect routine used by both connectWiFi and reconnectWiFi.
-// It does a scan, targets the best AP by BSSID+channel, disables power save,
-// and waits for connection with detailed status logging.
-//
-// KEY FIX: We use WiFi.begin() instead of raw esp_wifi_set_config()+esp_wifi_connect().
-// The raw API does NOT properly reset the radio state machine after a scan,
-// which causes AUTH_EXPIRE (reason 2) — the 802.11 auth frame exchange times
-// out because the radio is stuck in the wrong internal state.
+// ─── Shared wait-for-connection helper ──────────────────────────────────────
 
-static bool doConnect(const char *ssid, const char *password,
-                      bool doScan, int maxWaitSec) {
-  // Reset last disconnect reason for this attempt
-  s_lastDisconnectReason = 0;
-
-  int targetChannel = 0;
-  uint8_t targetBssid[6] = {0};
-  wifi_auth_mode_t targetAuth = WIFI_AUTH_OPEN;
-  bool haveBssid = false;
-
-  if (doScan) {
-    haveBssid = scanAndFindTarget(ssid, targetChannel, targetBssid, targetAuth);
-
-    if (haveBssid) {
-      if (targetAuth == WIFI_AUTH_WPA2_ENTERPRISE) {
-        PRINT_DEBUG("[WiFi] AP uses WPA2-ENTERPRISE — ESP cannot connect with PSK.\n");
-        return false;
-      }
-      if (targetChannel > 14) {
-        PRINT_DEBUG("[WiFi] Channel %d > 14 — 5GHz not supported by ESP32-S3.\n", targetChannel);
-        return false;
-      }
-    }
-  }
-
-  // ── Full STA teardown + re-init ──
-  // This is critical: WiFi.disconnect(true) tears down the STA interface
-  // completely, then WiFi.mode(WIFI_STA) re-initializes it cleanly.
-  // Without this, the radio can be stuck in a broken state after scanning.
-  WiFi.disconnect(true);   // disconnect + turn off STA
-  delay(100);
-  WiFi.mode(WIFI_STA);     // re-enable STA from scratch
-  delay(100);
-
-  // ── Disable long-range mode — use standard b/g/n ──
-  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
-
-  // ── Disable power save (modem sleep) ──
-  esp_wifi_set_ps(WIFI_PS_NONE);
-
-  // ── Connect using Arduino WiFi.begin() ──
-  // WiFi.begin() properly handles the internal state machine, unlike raw
-  // esp_wifi_set_config() + esp_wifi_connect() which skips critical steps.
-  if (haveBssid && targetChannel > 0) {
-    PRINT_DEBUG("[WiFi] Targeting BSSID %02X:%02X:%02X:%02X:%02X:%02X on ch %d\n",
-                targetBssid[0], targetBssid[1], targetBssid[2],
-                targetBssid[3], targetBssid[4], targetBssid[5], targetChannel);
-    WiFi.begin(ssid, password, targetChannel, targetBssid, true);
-  } else {
-    PRINT_DEBUG("[WiFi] Connecting without BSSID lock\n");
-    WiFi.begin(ssid, password);
-  }
-
-  // Wait for connection with status monitoring
+static bool waitForConnect(int maxWaitSec) {
   int maxAttempts = maxWaitSec * 2;  // 500ms per iteration
   wl_status_t lastStatus = WL_IDLE_STATUS;
 
@@ -217,7 +156,6 @@ static bool doConnect(const char *ssid, const char *password,
     if (current == WL_CONNECTED) {
       PRINT_DEBUG("\n[WiFi] Connected! IP: %s  Channel: %d  RSSI: %d dBm\n",
                   WiFi.localIP().toString().c_str(), WiFi.channel(), WiFi.RSSI());
-      // Confirm power save is off
       esp_wifi_set_ps(WIFI_PS_NONE);
       return true;
     }
@@ -225,15 +163,14 @@ static bool doConnect(const char *ssid, const char *password,
     if (current != lastStatus) {
       PRINT_DEBUG("\n[WiFi] Status: %s (code %d)", wifiStatusName(current), (int)current);
       if (s_lastDisconnectReason != 0) {
-        PRINT_DEBUG(" | Last disconnect reason: %d (%s)",
+        PRINT_DEBUG(" | reason: %d (%s)",
                     s_lastDisconnectReason, disconnectReasonName(s_lastDisconnectReason));
       }
       PRINT_DEBUG("\n");
       lastStatus = current;
 
-      // If the AP explicitly rejected us, don't keep waiting
       if (current == WL_CONNECT_FAILED) {
-        PRINT_DEBUG("[WiFi] Auth rejected by AP. Aborting wait.\n");
+        PRINT_DEBUG("[WiFi] Auth rejected by AP. Aborting.\n");
         break;
       }
     } else {
@@ -245,22 +182,20 @@ static bool doConnect(const char *ssid, const char *password,
               maxWaitSec, wifiStatusName(WiFi.status()), (int)WiFi.status());
 
   if (s_lastDisconnectReason != 0) {
-    PRINT_DEBUG("[WiFi] ESP-IDF disconnect reason: %d (%s)\n",
+    PRINT_DEBUG("[WiFi] ESP-IDF reason: %d (%s)\n",
                 s_lastDisconnectReason, disconnectReasonName(s_lastDisconnectReason));
-
-    if (s_lastDisconnectReason == 2 || s_lastDisconnectReason == 202) {
-      PRINT_DEBUG("[WiFi] >>> AUTH issue: Wrong password, MAC filter, or WPA3 mismatch.\n");
-      PRINT_DEBUG("[WiFi] >>> Try setting router to WPA2-PSK only (no WPA3).\n");
-    } else if (s_lastDisconnectReason == 14 || s_lastDisconnectReason == 204) {
-      PRINT_DEBUG("[WiFi] >>> HANDSHAKE_TIMEOUT: AP too slow or signal too weak.\n");
-    } else if (s_lastDisconnectReason == 201) {
-      PRINT_DEBUG("[WiFi] >>> NO_AP_FOUND: AP not visible. Is it on? 2.4GHz? Hidden?\n");
-    } else if (s_lastDisconnectReason == 15) {
-      PRINT_DEBUG("[WiFi] >>> GROUP_KEY_TIMEOUT: WPA3/PMF issue. Try WPA2-only on router.\n");
-    }
   }
 
   return false;
+}
+
+// ─── Reset radio to a clean state ───────────────────────────────────────────
+
+static void resetRadio() {
+  WiFi.disconnect(true);   // full STA teardown
+  delay(200);
+  WiFi.mode(WIFI_STA);     // re-init STA from scratch
+  delay(200);
 }
 
 // ─── Class implementation ───────────────────────────────────────────────────
@@ -274,6 +209,14 @@ ServerComms::ServerComms() {
 bool ServerComms::connectWiFi(const char *ssid, const char *password) {
   PRINT_DEBUG("[WiFi] Connecting to: %s\n", ssid);
 
+  // Dump password hex bytes so we can verify the compiler didn't mangle
+  // special characters like # * $ @
+  PRINT_DEBUG("[WiFi] Password hex: ");
+  for (int i = 0; password[i]; i++) {
+    PRINT_DEBUG("%02X ", (uint8_t)password[i]);
+  }
+  PRINT_DEBUG("  (%d bytes)\n", (int)strlen(password));
+
   if (WiFi.status() == WL_CONNECTED) {
     PRINT_DEBUG("[WiFi] Already connected\n");
     return true;
@@ -282,25 +225,103 @@ bool ServerComms::connectWiFi(const char *ssid, const char *password) {
   WiFi.mode(WIFI_STA);
   _wifiInitDone = true;
 
-  // Install event handler to capture real disconnect reasons
   installWiFiEventHandler();
-
-  // Disable auto-reconnect — we handle it ourselves in the main loop
   WiFi.setAutoReconnect(false);
 
-  // Attempt 1: scan + targeted BSSID connect (20s timeout)
-  PRINT_DEBUG("[WiFi] === Attempt 1: Targeted connect ===\n");
-  if (doConnect(ssid, password, true, 20)) {
-    return true;
+  // ═══════════════════════════════════════════════════════════════════
+  // ATTEMPT 1: Simplest possible — plain WiFi.begin(), no scan, no
+  // BSSID targeting, no protocol changes. Just the absolute minimum.
+  // If this works, the issue was in scan/radio-state management.
+  // ═══════════════════════════════════════════════════════════════════
+  PRINT_DEBUG("\n[WiFi] === Attempt 1: Plain WiFi.begin() (no scan) ===\n");
+  s_lastDisconnectReason = 0;
+
+  resetRadio();
+  WiFi.begin(ssid, password);
+
+  if (waitForConnect(15)) return true;
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ATTEMPT 2: Lower auth threshold to WPA-PSK (accepts WPA, WPA2, WPA3).
+  // Some routers advertise WPA2-PSK but internally do WPA/WPA2 mixed.
+  // Also explicitly configure PMF as capable-but-not-required.
+  // ═══════════════════════════════════════════════════════════════════
+  PRINT_DEBUG("\n[WiFi] === Attempt 2: esp_wifi_set_config (WPA threshold, PMF capable) ===\n");
+  s_lastDisconnectReason = 0;
+
+  resetRadio();
+
+  // Configure but don't auto-connect yet
+  WiFi.begin(ssid, password, 0, NULL, false);
+
+  // Now override the config with relaxed auth settings
+  wifi_config_t conf;
+  esp_wifi_get_config(WIFI_IF_STA, &conf);
+
+  // Accept WPA or higher (not just WPA2+)
+  conf.sta.threshold.authmode = WIFI_AUTH_WPA_PSK;
+
+  // PMF: capable but not required
+  conf.sta.pmf_cfg.capable = true;
+  conf.sta.pmf_cfg.required = false;
+
+  // Disable fast scan — do full channel scan to find best AP
+  conf.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+  conf.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+
+  esp_wifi_set_config(WIFI_IF_STA, &conf);
+
+  // Set protocol and power-save AFTER config, BEFORE connect
+  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+  esp_wifi_set_ps(WIFI_PS_NONE);
+
+  // NOW connect
+  esp_wifi_connect();
+
+  if (waitForConnect(15)) return true;
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ATTEMPT 3: Scan first to find channel+BSSID, then targeted connect.
+  // Uses the explicit config path with found AP details.
+  // ═══════════════════════════════════════════════════════════════════
+  PRINT_DEBUG("\n[WiFi] === Attempt 3: Scan + targeted BSSID connect ===\n");
+  s_lastDisconnectReason = 0;
+
+  resetRadio();
+
+  int targetChannel = 0;
+  uint8_t targetBssid[6] = {0};
+  wifi_auth_mode_t targetAuth = WIFI_AUTH_OPEN;
+
+  if (scanAndFindTarget(ssid, targetChannel, targetBssid, targetAuth)) {
+    resetRadio();
+
+    // Use WiFi.begin with channel+BSSID targeting
+    WiFi.begin(ssid, password, targetChannel, targetBssid, false);
+
+    // Get the config and adjust auth settings
+    esp_wifi_get_config(WIFI_IF_STA, &conf);
+
+    // Match the exact auth mode the AP reported
+    conf.sta.threshold.authmode = (targetAuth == WIFI_AUTH_OPEN)
+      ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_PSK;
+    conf.sta.pmf_cfg.capable = true;
+    conf.sta.pmf_cfg.required = false;
+
+    esp_wifi_set_config(WIFI_IF_STA, &conf);
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    esp_wifi_connect();
+
+    if (waitForConnect(20)) return true;
   }
 
-  // Attempt 2: simple connect without BSSID lock (15s timeout)
-  PRINT_DEBUG("[WiFi] === Attempt 2: Fallback (no BSSID lock) ===\n");
-  if (doConnect(ssid, password, false, 15)) {
-    return true;
-  }
-
-  PRINT_DEBUG("[WiFi] Both attempts failed.\n");
+  PRINT_DEBUG("\n[WiFi] All attempts failed.\n");
+  PRINT_DEBUG("[WiFi] TROUBLESHOOTING:\n");
+  PRINT_DEBUG("[WiFi]   1. Temporarily change router password to something simple (e.g. Test12345678)\n");
+  PRINT_DEBUG("[WiFi]   2. Check if MAC filtering is enabled on router\n");
+  PRINT_DEBUG("[WiFi]   3. Set router to WPA2-PSK only (disable WPA3)\n");
+  PRINT_DEBUG("[WiFi]   4. Set 2.4GHz channel width to 20MHz\n");
   return false;
 }
 
@@ -318,20 +339,31 @@ void ServerComms::reconnectWiFi(const char *ssid, const char *password) {
   }
 
   _reconnectCount++;
+  s_lastDisconnectReason = 0;
 
   PRINT_DEBUG("[WiFi] Reconnect attempt #%d | Status: %s (code %d)\n",
               _reconnectCount, wifiStatusName(WiFi.status()), (int)WiFi.status());
 
-  // Every 3rd attempt, do a full scan to re-target the AP (it may have
-  // changed channel). Other attempts use a fast non-scan connect.
-  bool doScan = (_reconnectCount % 3 == 1);
+  resetRadio();
 
-  if (doScan) {
-    PRINT_DEBUG("[WiFi] Reconnect with scan (re-targeting AP)\n");
+  // Every 3rd attempt, do a scan to re-target the AP.
+  // Other attempts use plain WiFi.begin() (faster, less risky).
+  if (_reconnectCount % 3 == 0) {
+    PRINT_DEBUG("[WiFi] Reconnect with scan\n");
+    int ch = 0;
+    uint8_t bssid[6] = {0};
+    wifi_auth_mode_t auth = WIFI_AUTH_OPEN;
+    if (scanAndFindTarget(ssid, ch, bssid, auth)) {
+      resetRadio();
+      WiFi.begin(ssid, password, ch, bssid, true);
+    } else {
+      WiFi.begin(ssid, password);
+    }
+  } else {
+    WiFi.begin(ssid, password);
   }
 
-  // Use a shorter timeout for reconnect so loop() isn't blocked too long
-  doConnect(ssid, password, doScan, 10);
+  waitForConnect(10);
 }
 
 bool ServerComms::isWiFiConnected() const {
