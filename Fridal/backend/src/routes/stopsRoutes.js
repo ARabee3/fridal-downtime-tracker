@@ -13,12 +13,24 @@ if (!fs.existsSync(EXPORTS_DIR)) {
   fs.mkdirSync(EXPORTS_DIR);
 }
 
+const LOCK_TTL_MS = 60000; // 1 minute worker lock
+
 router.get('/', (req, res) => {
   const data = loadData();
   const today = getTodayKey();
   if (data.today !== today) {
     return res.json({ stops: [], date: today, summary: { total: 0, totalMinutes: 0, pending: 0 } });
   }
+
+  let needsSave = false;
+  data.stops.forEach(s => {
+    if (s.lockedBy === 'worker' && s.lockedAt && (Date.now() - s.lockedAt) >= LOCK_TTL_MS) {
+      delete s.lockedBy;
+      delete s.lockedAt;
+      needsSave = true;
+    }
+  });
+  if (needsSave) saveData(data);
 
   const stops = data.stops.filter(s => s.date === today);
   const totalSeconds = stops.reduce((sum, s) => sum + (s.durationSeconds ?? Math.round((s.durationMinutes || 0) * 60)), 0);
@@ -48,6 +60,34 @@ router.patch('/:id', (req, res) => {
   if (location !== undefined) stop.location = location;
   if (stop.cause && stop.location) stop.status = 'done';
 
+  // Clear any stale lock fields on successful edit
+  if (stop.lockedBy || stop.lockedAt) {
+    delete stop.lockedBy;
+    delete stop.lockedAt;
+  }
+
+  saveData(data);
+  res.json({ success: true, stop });
+});
+
+router.post('/:id/lock', (req, res) => {
+  const data = loadData();
+  const stop = data.stops.find(s => s.id === req.params.id);
+  if (!stop) return res.status(404).json({ error: 'Stop not found' });
+
+  stop.lockedBy = req.body.lockedBy || 'worker';
+  stop.lockedAt = Date.now();
+  saveData(data);
+  res.json({ success: true, stop });
+});
+
+router.post('/:id/unlock', (req, res) => {
+  const data = loadData();
+  const stop = data.stops.find(s => s.id === req.params.id);
+  if (!stop) return res.status(404).json({ error: 'Stop not found' });
+
+  delete stop.lockedBy;
+  delete stop.lockedAt;
   saveData(data);
   res.json({ success: true, stop });
 });

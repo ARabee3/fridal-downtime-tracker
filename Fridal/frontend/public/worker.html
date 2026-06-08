@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FRIDAL — Worker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #f7f5f2;
+    --surface:   #ffffff;
+    --surface2:  #f0ece6;
+    --border:    #e2ddd6;
+    --border2:   #d6d0c8;
+    --accent:    #c77a00;
+    --accent2:   #e09510;
+    --red:       #d32f2f;
+    --red-dim:   rgba(211,47,47,0.10);
+    --green:     #2e7d32;
+    --green-dim: rgba(46,125,50,0.10);
+    --blue:      #1565c0;
+    --blue-dim:  rgba(21,101,192,0.10);
+    --text:      #2d2a26;
+    --text-dim:  #6b6560;
+    --text-mute: #a39e98;
+    --mono:      'DM Mono', monospace;
+    --sans:      'DM Sans', sans-serif;
+    --display:   'Bebas Neue', sans-serif;
+  }
+
+  html { font-size: 16px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    color: #fff;
+  }
+
+  .logo-text {
+    font-family: var(--display);
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: var(--text);
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-top: -2px;
+    display: block;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .live-clock {
+    font-family: var(--mono);
+    font-size: 20px;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+
+  .date-str {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: right;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .status-pill.ok { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .status-pill.alarm { background: var(--red-dim); border-color: var(--red); color: var(--red); animation: pulse-border 1s infinite; }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .status-pill.alarm .dot { animation: blink 0.8s step-end infinite; }
+
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes pulse-border { 0%,100% { box-shadow: 0 0 0 0 rgba(211,47,47,0.2); } 50% { box-shadow: 0 0 0 5px rgba(211,47,47,0); } }
+
+  /* Main */
+  .container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* Active banner */
+  .active-banner {
+    background: var(--red-dim);
+    border: 1px solid var(--red);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+  .active-banner.visible { display: flex; }
+  .active-banner .icon { font-size: 40px; }
+  .active-banner .title { font-family: var(--display); font-size: 28px; letter-spacing: 2px; color: var(--red); }
+  .active-banner .subtitle { font-size: 13px; color: var(--text-dim); }
+  .active-banner .timer {
+    font-family: var(--mono);
+    font-size: 42px;
+    color: var(--red);
+    letter-spacing: 3px;
+    margin-top: 4px;
+  }
+
+  /* Running state */
+  .running-state {
+    background: var(--green-dim);
+    border: 1px solid var(--green);
+    border-radius: 12px;
+    padding: 40px 24px;
+    text-align: center;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .running-state.visible { display: flex; }
+  .running-state .icon { font-size: 48px; }
+  .running-state .title { font-family: var(--display); font-size: 28px; letter-spacing: 2px; color: var(--green); }
+  .running-state .subtitle { font-size: 14px; color: var(--text-dim); }
+
+  /* Pending cards container */
+  .pending-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* Form card */
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    animation: slide-up 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } }
+
+  .form-card .form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .form-card .form-title {
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: 2px;
+  }
+  .form-card .form-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 3px 10px;
+    border-radius: 4px;
+  }
+
+  .info-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .info-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-mute);
+    font-weight: 600;
+  }
+  .info-value {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+  }
+
+  .form-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .form-select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: var(--sans);
+    font-size: 16px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M0 0l6 8 6-8z' fill='%236b6560'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    padding-right: 40px;
+  }
+  .form-select:focus { border-color: var(--accent); }
+  .form-select option { background: var(--surface2); color: var(--text); }
+
+  .btn-submit {
+    width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 16px;
+    border-radius: 10px;
+    font-family: var(--sans); font-size: 16px; font-weight: 600;
+    cursor: pointer; border: 1px solid; transition: all 0.18s;
+    letter-spacing: 1px;
+    background: var(--green); color: #fff; border-color: var(--green);
+    margin-top: 4px;
+  }
+  .btn-submit:hover { background: #1b5e20; border-color: #1b5e20; }
+  .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: var(--surface); border: 1px solid var(--border2);
+    color: var(--text); padding: 14px 24px; border-radius: 10px;
+    font-size: 14px; z-index: 9999;
+    transform: translateY(100px); opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: var(--green); }
+  #toast.error { border-color: var(--red); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚙️</div>
+    <div>
+      <div class="logo-text">FRIDAL</div>
+      <span class="logo-sub">Downtime Tracker</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div>
+      <div class="live-clock" id="clock">--:--:--</div>
+      <div class="date-str" id="dateStr">---</div>
+    </div>
+    <div class="status-pill ok" id="machineStatus">
+      <div class="dot"></div>
+      <span id="statusText">RUNNING</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Active failure banner -->
+  <div class="active-banner" id="activeBanner">
+    <div class="icon">🚨</div>
+    <div class="title">MACHINE FAILURE</div>
+    <div class="subtitle">Started at <span id="bannerStart" style="font-family:var(--mono);color:var(--text)"></span></div>
+    <div class="timer" id="elapsedTimer">00:00</div>
+    <div class="subtitle" style="margin-top:4px">Please wait for the failure to end before entering details.</div>
+  </div>
+
+  <!-- Running normally -->
+  <div class="running-state" id="runningState">
+    <div class="icon">✅</div>
+    <div class="title">MACHINE RUNNING</div>
+    <div class="subtitle">No failures recorded. Everything is operating normally.</div>
+  </div>
+
+  <!-- Pending cards container -->
+  <div class="pending-container" id="pendingContainer"></div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '';
+let causes = [], locations = [];
+let elapsedInterval = null;
+let pollInterval = null;
+
+// ─── Previous state for smart diff rendering ─────────────────────────────────
+let prevActiveId = null;
+let prevPendingIds = new Set();
+
+// ─── Clock ───────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB');
+  document.getElementById('dateStr').textContent = now.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' }).toUpperCase();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── Toast ───────────────────────────────────────────────────────────────────
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+  el.className = 'show ' + type;
+  setTimeout(() => el.className = '', 3000);
+}
+
+// ─── Elapsed timer ───────────────────────────────────────────────────────────
+function startElapsed(startTimeStr) {
+  if (elapsedInterval) clearInterval(elapsedInterval);
+  const [sh, sm, ss = 0] = startTimeStr.split(':').map(Number);
+  const startMs = ((sh * 60 + sm) * 60 + ss) * 1000;
+  function update() {
+    const now = new Date();
+    const nowMs = (now.getHours() * 60 + now.getMinutes()) * 60 * 1000 + now.getSeconds() * 1000;
+    const diff = Math.max(0, nowMs - startMs);
+    const s = Math.floor(diff / 1000) % 60;
+    const m = Math.floor(diff / 60000) % 60;
+    const h = Math.floor(diff / 3600000);
+    const str = h > 0
+      ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+      : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    document.getElementById('elapsedTimer').textContent = str;
+  }
+  update();
+  elapsedInterval = setInterval(update, 1000);
+}
+
+function stopElapsed() {
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+}
+
+// ─── Smart diff render ───────────────────────────────────────────────────────
+function render(data) {
+  const stops = data.stops;
+  const active = stops.find(x => x.status === 'active');
+  const pending = stops.filter(x => x.status === 'pending');
+  const pendingIds = new Set(pending.map(p => p.id));
+
+  const banner = document.getElementById('activeBanner');
+  const running = document.getElementById('runningState');
+  const pendingContainer = document.getElementById('pendingContainer');
+  const statusPill = document.getElementById('machineStatus');
+  const statusText = document.getElementById('statusText');
+
+  // ── Active banner (only re-render if changed) ──
+  const activeId = active ? active.id : null;
+  if (activeId !== prevActiveId) {
+    if (active) {
+      banner.classList.add('visible');
+      document.getElementById('bannerStart').textContent = active.start;
+      startElapsed(active.start);
+      statusPill.className = 'status-pill alarm';
+      statusText.textContent = 'FAILURE';
+    } else {
+      banner.classList.remove('visible');
+      stopElapsed();
+    }
+    prevActiveId = activeId;
+  }
+
+  // ── Running state ──
+  if (!active && pending.length === 0) {
+    running.classList.add('visible');
+    statusPill.className = 'status-pill ok';
+    statusText.textContent = 'RUNNING';
+  } else {
+    running.classList.remove('visible');
+    if (!active) {
+      statusPill.className = 'status-pill ok';
+      statusText.textContent = 'RUNNING';
+    }
+  }
+
+  // ── Pending cards: remove cards for stops that are gone ──
+  prevPendingIds.forEach(id => {
+    if (!pendingIds.has(id)) {
+      const card = document.getElementById('card-' + id);
+      if (card) card.remove();
+    }
+  });
+
+  // ── Pending cards: add cards for new stops ──
+  pending.forEach((stop, idx) => {
+    if (!prevPendingIds.has(stop.id)) {
+      createPendingCard(stop, idx + 1);
+    }
+  });
+
+  prevPendingIds = pendingIds;
+}
+
+// ─── Create a pending card ───────────────────────────────────────────────────
+function createPendingCard(stop, number) {
+  const container = document.getElementById('pendingContainer');
+  const locOpts = locations.map(l => `<option value="${l}">${l}</option>`).join('');
+  const causeOpts = causes.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  const card = document.createElement('div');
+  card.className = 'form-card';
+  card.id = 'card-' + stop.id;
+  card.dataset.stopId = stop.id;
+  card.innerHTML = `
+    <div class="form-header">
+      <div class="form-title">FAILURE DETAILS #${number}</div>
+      <div class="form-badge">${stop.machine_id}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-item">
+        <div class="info-label">Start</div>
+        <div class="info-value">${stop.start}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">End</div>
+        <div class="info-value">${stop.end || '—'}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Duration</div>
+        <div class="info-value" style="color:var(--accent)">${stop.duration || '—'}</div>
+      </div>
+    </div>
+    <div>
+      <label class="form-label">Location</label>
+      <select class="form-select" data-field="location">
+        <option value="">— Select Location —</option>
+        ${locOpts}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Cause</label>
+      <select class="form-select" data-field="cause">
+        <option value="">— Select Cause —</option>
+        ${causeOpts}
+      </select>
+    </div>
+    <button class="btn-submit" onclick="submitCard('${stop.id}', this)">
+      Submit Details
+    </button>
+  `;
+
+  container.appendChild(card);
+}
+
+// ─── Submit a card ───────────────────────────────────────────────────────────
+async function submitCard(stopId, btn) {
+  const card = document.getElementById('card-' + stopId);
+  if (!card) return;
+
+  const loc = card.querySelector('[data-field="location"]').value;
+  const cause = card.querySelector('[data-field="cause"]').value;
+
+  if (!loc || !cause) {
+    toast('Please select both location and cause', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const res = await fetch(API + '/api/stops/' + stopId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cause, location: loc })
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast(d.error || 'Failed to save details', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Submit Details';
+      return;
+    }
+    toast('Details saved successfully');
+    card.remove();
+    prevPendingIds.delete(stopId);
+    // Check if no more pending + no active -> show running state
+    const hasPending = document.querySelector('.form-card');
+    const hasActive = document.getElementById('activeBanner').classList.contains('visible');
+    if (!hasPending && !hasActive) {
+      document.getElementById('runningState').classList.add('visible');
+      document.getElementById('machineStatus').className = 'status-pill ok';
+      document.getElementById('statusText').textContent = 'RUNNING';
+    }
+  } catch (e) {
+    toast('Failed to save details', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Submit Details';
+  }
+}
+
+// ─── App ─────────────────────────────────────────────────────────────────────
+window.app = {
+  async refreshData() {
+    try {
+      const [stopsRes, causesRes] = await Promise.all([
+        fetch(API + '/api/stops'),
+        fetch(API + '/api/causes')
+      ]);
+      const stopsData = await stopsRes.json();
+      const causesData = await causesRes.json();
+      causes = causesData.causes || [];
+      locations = causesData.locations || [];
+      render(stopsData);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+};
+
+window.app.refreshData();
+pollInterval = setInterval(() => window.app.refreshData(), 3000);
+</script>
+</body>
+</html>

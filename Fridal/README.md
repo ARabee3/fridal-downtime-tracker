@@ -1,11 +1,11 @@
-# Fridail Downtime Tracker
+# FRIDAL Downtime Tracker
 
-Industrial machine downtime tracking system for Fridal factory.
+Industrial machine downtime tracking system for FRIDAL factory.
 
 ## Architecture
 
 ```
-fridail-downtime/
+fridal-downtime/
 ├── backend/
 │   ├── server.js          # Express API server
 │   ├── data.json          # Today's stop data (auto-created)
@@ -13,7 +13,8 @@ fridail-downtime/
 │   └── exports/           # Daily Excel reports saved here
 └── frontend/
     └── public/
-        └── index.html     # Single-page dashboard
+        ├── index.html     # Admin dashboard
+        └── worker.html    # Worker panel (simple)
 ```
 
 ## Setup & Run
@@ -24,7 +25,9 @@ npm install
 node server.js
 ```
 
-Open browser: **http://localhost:3000**
+Open browser:
+- **Admin:** http://localhost:3000
+- **Worker:** http://localhost:3000/worker
 
 ## One-Command Start Scripts (Windows + Linux)
 
@@ -64,6 +67,29 @@ What the scripts do:
 - Run `npm install` in `backend/`
 - Start `node server.js`
 - Open `http://localhost:3000` (unless skipped)
+
+---
+
+## Pages
+
+### Admin Dashboard (`/`)
+- Full-featured management interface
+- Stops log in **descending order** (newest first)
+- Stats cards: total stops, downtime, microstops, classified
+- Active failure banner with live elapsed timer
+- Edit cause/location for any pending stop directly in the table
+- Manage causes & locations lists
+- Export history with download
+- Sensor simulator for testing
+- Excel export to `.xlsx`
+
+### Worker Panel (`/worker`)
+- Ultra-simple interface for factory-floor workers
+- Shows **all pending stops** as independent cards
+- Each card displays: **Start, End, Duration**, Location dropdown, Cause dropdown, Submit button
+- **Smart re-render:** the page only updates when something actually changes (new failure, failure classified, active stop starts/ends). Existing cards never flicker or reset while the worker is interacting
+- Active failure banner with live timer while a failure is in progress
+- "Machine Running" state when everything is clear
 
 ---
 
@@ -120,14 +146,24 @@ void reportFailureEnd() {
 
 ---
 
+## Startup Behavior
+
+When the server starts, it automatically cleans up any `active` stops left over from a previous session (e.g., if the server crashed while a failure was in progress). These stale active stops are auto-ended with the current time and converted to `pending` status.
+
+---
+
 ## API Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/sensor/failure-start` | Report failure start |
-| POST | `/api/sensor/failure-end` | Report failure end |
+| POST | `/api/sensor/failure-start` | Sensor reports failure began |
+| POST | `/api/sensor/failure-end` | Sensor reports failure resolved |
+| POST | `/api/simulate/start` | Simulate failure start (testing) |
+| POST | `/api/simulate/end` | Simulate failure end (testing) |
 | GET | `/api/stops` | Get today's stops + summary |
 | PATCH | `/api/stops/:id` | Update stop's cause/location |
+| POST | `/api/stops/:id/lock` | Lock a stop (optional) |
+| POST | `/api/stops/:id/unlock` | Unlock a stop (optional) |
 | POST | `/api/submit` | Export today to Excel & download |
 | GET | `/api/causes` | Get causes & locations lists |
 | PUT | `/api/causes` | Update causes & locations |
@@ -141,7 +177,7 @@ void reportFailureEnd() {
 Each daily export (`exports/downtime_YYYY-MM-DD.xlsx`) contains:
 
 **Sheet 1 — Downtime Log:**
-- Date, Machine, Start Time, End Time, Duration, Duration (min), Location, Cause, Type, Status
+- Date, Machine, Start Time, End Time, Duration, Duration (sec), Location, Cause, Type, Status
 
 **Sheet 2 — Summary:**
 - Total stops, regular stops, microstops

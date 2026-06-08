@@ -1,0 +1,10 @@
+# Build artifacts
+**/.pio/
+**/node_modules/
+**/exports/
+**/.env
+**/data.json
+
+# System files
+.DS_Store
+Thumbs.db

@@ -85,7 +85,7 @@ if [[ "$SKIP_BROWSER" -eq 0 ]]; then
   fi
 fi
 
-info "Starting Fridail backend server..."
+info "Starting FRIDAL backend server..."
 echo "Press Ctrl+C to stop."
 
 node server.js

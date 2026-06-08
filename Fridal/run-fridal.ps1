@@ -66,7 +66,7 @@ if (-not $SkipBrowser) {
     Start-Process "http://localhost:3000"
 }
 
-Write-Info "Starting Fridail backend server..."
+Write-Info "Starting FRIDAL backend server..."
 Write-Host "Press Ctrl+C to stop."
 
 node server.js

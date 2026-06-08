@@ -14,12 +14,12 @@
 
 // ========== WiFi CONFIG ==========
 // Replace with your WiFi SSID and password
-#define WIFI_SSID "Redmi Note 8 Pro2"
-#define WIFI_PASSWORD "@12345678@"
+#define WIFI_SSID "OHS"
+#define WIFI_PASSWORD "LOOOL911"
 
 // ========== SERVER CONFIG ==========
 // IP or hostname of the Fridal backend server
-#define SERVER_HOST "192.168.50.249"
+#define SERVER_HOST "10.238.6.240"
 #define SERVER_PORT 3000
 #define SERVER_API_PATH "/api/sensor"
 
@@ -33,9 +33,17 @@
 
 // ========== ESP-NOW CONFIG ==========
 // The MAC address of the secondary ESP (the IR node).
-// Replace with the actual MAC of your secondary board.
-//  00:70:07:82:CB:18
-#define SECONDARY_PEER_MAC {0x00, 0x70, 0x07, 0x82, 0xCB, 0x18}
+#define SECONDARY_PEER_MAC {0x48, 0xCA, 0x43, 0xAF, 0x8B, 0x78}
+
+// Maximum age (ms) of the last ESP-NOW message before data is considered stale
+#define ESPNOW_STALE_MS 5000
+
+// ========== HTTP CONFIG ==========
+// Timeout for HTTP requests to the server (ms)
+#define HTTP_TIMEOUT_MS 5000
+
+// How often to retry failed HTTP requests in the main loop (ms)
+#define HTTP_RETRY_INTERVAL_MS 2000
 
 // ========== DEBUG ==========
 // Set to 1 to enable verbose debug output on Serial

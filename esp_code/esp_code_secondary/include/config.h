@@ -20,14 +20,12 @@
 
 // --- ESP-NOW / Network ---
 // The MAC address of the main ESP (the receiver) that will get messages
-// from this secondary IR node. Replace the default all-FF address with
-// the actual 6-byte MAC of the main board to target it directly.
-// Example: {0x24,0x6F,0x28,0xAA,0xBB,0xCC}
-#define MAIN_PEER_MAC {0x00, 0x70, 0x07, 0x82, 0xCA, 0x34}
+// from this secondary IR node.
+#define MAIN_PEER_MAC {0x74, 0x4D, 0xBD, 0x46, 0x1B, 0x24}
 
 // WiFi credentials (to sync on the same channel as main ESP)
-#define WIFI_SSID "Redmi Note 8 Pro2"
-#define WIFI_PASSWORD "@12345678@"
+#define WIFI_SSID "OHS"
+#define WIFI_PASSWORD "LOOOL911"
 
 // Enable verbose debug printing to Serial when set to 1. Useful while testing.
 #define BOARD_DEBUG 1

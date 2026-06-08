@@ -5,144 +5,146 @@
 #include "EspNowDriver.h"
 #include "ServerComms.h"
 
-// Define static peers from config
 static const uint8_t SECONDARY_MAC[6] = SECONDARY_PEER_MAC;
 
-// Global driver instances
 CurrentSensor currentSensor(CURRENT_SENSOR_PIN, CURRENT_ACTIVE_HIGH, CURRENT_DEBOUNCE_MS);
 EspNowDriver espNow;
 ServerComms server;
 
-// Failure state tracking
 bool failureActive = false;
 unsigned long failureClearTimer = 0;
+unsigned long lastHttpRetry = 0;
+bool httpStartPending = false;
 
 void setup() {
   Serial.begin(115200);
   delay(500);
 
-  #if BOARD_DEBUG
-  Serial.println("\n\n=== MAIN ESP (Current Sensor) Starting ===");
-  #endif
+  PRINT_DEBUG("\n=== MAIN ESP (Current Sensor) Starting ===\n");
 
-  // Initialize current sensor
   currentSensor.begin();
-  #if BOARD_DEBUG
-  Serial.println("Current sensor initialized");
+  PRINT_DEBUG("Current sensor initialized\n");
+
   uint8_t mac[6];
   WiFi.macAddress(mac);
-  Serial.printf("MAIN ESP MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  Serial.printf("Config format: {0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X}\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  #endif
+  PRINT_DEBUG("MAIN ESP MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  PRINT_DEBUG("Config format: {0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X}\n",
+              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-  // Connect to WiFi
   if (!server.connectWiFi(WIFI_SSID, WIFI_PASSWORD)) {
-    #if BOARD_DEBUG
-    Serial.println("ERROR: WiFi connection failed");
-    #endif
+    PRINT_DEBUG("ERROR: WiFi connection failed\n");
   } else {
-    #if BOARD_DEBUG
-    Serial.printf("WiFi channel: %d\n", WiFi.channel());
-    #endif
+    PRINT_DEBUG("WiFi channel: %d\n", WiFi.channel());
   }
 
-  // Initialize ESP-NOW to receive IR messages from secondary
   if (!espNow.begin(SECONDARY_MAC)) {
-    #if BOARD_DEBUG
-    Serial.println("ERROR: ESP-NOW init failed");
-    #endif
+    PRINT_DEBUG("ERROR: ESP-NOW init failed\n");
   }
 
-  // Optional: register raw message callback
   espNow.onRecv([](const char *payload, int len) {
-    #if BOARD_DEBUG
     char buf[128];
-    if (len < sizeof(buf)) {
+    if (len < (int)sizeof(buf)) {
       memcpy(buf, payload, len);
       buf[len] = '\0';
-      Serial.printf("Raw ESP-NOW: %s\n", buf);
+      PRINT_DEBUG("Raw ESP-NOW: %s\n", buf);
     }
-    #endif
   });
 
-  #if BOARD_DEBUG
-  Serial.println("=== Setup complete ===\n");
-  #endif
+  PRINT_DEBUG("=== Setup complete ===\n\n");
 }
 
 void loop() {
   static unsigned long loopCount = 0;
+  static unsigned long lastStatus = 0;
+  static unsigned long lastLoop = 0;
+
   loopCount++;
 
-  // Immediate heartbeat to confirm loop continues
-  Serial.flush();
+  unsigned long now = millis();
+  if (now - lastLoop < 50) return;
+  lastLoop = now;
 
-  // Update the current sensor
   currentSensor.update();
   bool currentFault = currentSensor.isFault();
-  // Get the latest IR state from ESP-NOW (updated via callback)
+
+  bool irValid = espNow.hasValidData();
   int irState = espNow.getLastIrState();
-  int irIdle = espNow.getLastIrIdle();
-  // Determine overall failure condition:
-  // Failure occurs if:
-  //   - Current sensor detects a fault, OR
-  //   - IR sensor has been idle (no bottle detection for 30+ seconds)
-  bool shouldFail = currentFault || (irIdle == 1);
+  int irIdle = irValid ? espNow.getLastIrIdle() : -1;
 
-  // Print continuous status every 100ms (non-blocking)
-  static unsigned long lastStatus = 0;
-  static bool loopStarted = false;
-  
-  if (!loopStarted) {
-    Serial.println("[LOOP] Started, waiting for updates...");
-    loopStarted = true;
-  }
-  
-  loopCount++;
-  if (millis() - lastStatus >= 1000) {
-    lastStatus = millis();
-    Serial.printf("Loop #%lu | Current: %d | IR State: %d | IR Idle: %d | Should Fail: %d | Active: %d\n",
-                loopCount, currentFault ? 1 : 0, irState, irIdle, shouldFail ? 1 : 0, failureActive ? 1 : 0);
+  bool shouldFail = currentFault || (irValid && irIdle == 1);
+
+  if (now - lastStatus >= 1000) {
+    lastStatus = now;
+    PRINT_DEBUG("Loop #%lu | Current: %d | IR State: %d | IR Idle: %d | IR Valid: %d | Should Fail: %d | Active: %d | WiFi: %d\n",
+                loopCount, currentFault ? 1 : 0, irState, irIdle, irValid ? 1 : 0,
+                shouldFail ? 1 : 0, failureActive ? 1 : 0,
+                server.isWiFiConnected() ? 1 : 0);
   }
 
-  // State transition logic
-  if (shouldFail && !failureActive) {
-    // Transition: no failure -> failure detected
-    failureActive = true;
-    failureClearTimer = 0;
+  if (!server.isWiFiConnected()) {
+    PRINT_DEBUG("[LOOP] WiFi disconnected, reconnecting...\n");
+    server.connectWiFi(WIFI_SSID, WIFI_PASSWORD);
+  }
 
-    #if BOARD_DEBUG
-    Serial.println("[EVENT] FAILURE START detected");
-    #endif
+  if (shouldFail && !failureActive && !httpStartPending) {
+    httpStartPending = true;
+    lastHttpRetry = now;
 
-    // Send failure-start to server
-    server.sendFailureStart(MACHINE_ID);
-    Serial.printf("[LOOP %lu] Sent failure start to server\n", loopCount);
-  } else if (!shouldFail && failureActive) {
-    // Transition: failure -> potential clear
-    // Use debounce timer to avoid rapid on/off chatter
+    PRINT_DEBUG("[EVENT] FAILURE START detected\n");
+
+    if (server.sendFailureStart(MACHINE_ID)) {
+      failureActive = true;
+      failureClearTimer = 0;
+      httpStartPending = false;
+      PRINT_DEBUG("[LOOP %lu] Failure start sent OK\n", loopCount);
+    } else {
+      PRINT_DEBUG("[LOOP %lu] Failure start FAILED, will retry\n", loopCount);
+    }
+  }
+
+  if (httpStartPending && !failureActive) {
+    if (now - lastHttpRetry >= HTTP_RETRY_INTERVAL_MS) {
+      lastHttpRetry = now;
+      PRINT_DEBUG("[RETRY] Retrying failure-start\n");
+      if (server.sendFailureStart(MACHINE_ID)) {
+        failureActive = true;
+        failureClearTimer = 0;
+        httpStartPending = false;
+        PRINT_DEBUG("[RETRY] Failure start sent OK\n");
+      }
+    }
+  }
+
+  if (!shouldFail && failureActive) {
     if (failureClearTimer == 0) {
-      failureClearTimer = millis();
+      failureClearTimer = now;
     }
 
-    unsigned long elapsed = millis() - failureClearTimer;
+    unsigned long elapsed = now - failureClearTimer;
     if (elapsed >= FAILURE_CLEAR_DEBOUNCE_MS) {
-      // Debounce window expired; failure is truly cleared
       failureActive = false;
       failureClearTimer = 0;
 
-      #if BOARD_DEBUG
-      Serial.println("[EVENT] FAILURE STOP detected");
-      #endif
+      PRINT_DEBUG("[EVENT] FAILURE STOP detected\n");
 
-      // Send failure-stop to server
-      server.sendFailureStop(MACHINE_ID);
-      Serial.printf("[LOOP %lu] Sent failure stop to server\n", loopCount);
+      if (server.sendFailureStop(MACHINE_ID)) {
+        PRINT_DEBUG("[LOOP %lu] Failure stop sent OK\n", loopCount);
+      } else {
+        PRINT_DEBUG("[LOOP %lu] Failure stop FAILED, will retry\n", loopCount);
+        failureActive = true;
+        lastHttpRetry = now;
+      }
     }
-  } else {
-    // No state change; reset debounce timer
+  } else if (shouldFail && failureActive) {
     failureClearTimer = 0;
   }
 
-  delay(50);
+  if (failureActive && !shouldFail && failureClearTimer == 0) {
+    failureClearTimer = now;
+  }
+
+  if (httpStartPending && shouldFail && failureActive) {
+    httpStartPending = false;
+  }
 }

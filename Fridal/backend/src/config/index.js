@@ -4,5 +4,5 @@ module.exports = {
   causesFile: 'causes.json',
   exportsDir: 'exports',
   frontendPath: '../frontend/public',
-  microstopThreshold: 1
+  microstopThreshold: 0.5,
 };

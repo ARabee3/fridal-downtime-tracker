@@ -1,11 +1,11 @@
 #pragma once
 
 // WiFi credentials for the network that can reach the Fridal backend
-#define WIFI_SSID "Redmi Note 8 Pro2"
-#define WIFI_PASSWORD "@12345678@"
+#define WIFI_SSID "OHS"
+#define WIFI_PASSWORD "LOOOL911"
 
 // Backend server settings
-#define SERVER_HOST "192.168.223.249"
+#define SERVER_HOST "10.238.6.240"
 #define SERVER_PORT 3000
 #define SERVER_API_BASE "/api/sensor"
 

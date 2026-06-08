@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fridail — Downtime Tracker</title>
+<title>FRIDAL — Downtime Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -11,22 +11,22 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg:        #0b0e13;
-    --surface:   #131820;
-    --surface2:  #1a2030;
-    --border:    #232d3f;
-    --border2:   #2d3a50;
-    --accent:    #e8a020;
-    --accent2:   #f0c060;
-    --red:       #e84040;
-    --red-dim:   rgba(232,64,64,0.15);
-    --green:     #38c172;
-    --green-dim: rgba(56,193,114,0.12);
-    --blue:      #4a9eff;
-    --blue-dim:  rgba(74,158,255,0.12);
-    --text:      #e8edf5;
-    --text-dim:  #7a8ba0;
-    --text-mute: #404f62;
+    --bg:        #f7f5f2;
+    --surface:   #ffffff;
+    --surface2:  #f0ece6;
+    --border:    #e2ddd6;
+    --border2:   #d6d0c8;
+    --accent:    #c77a00;
+    --accent2:   #e09510;
+    --red:       #d32f2f;
+    --red-dim:   rgba(211,47,47,0.10);
+    --green:     #2e7d32;
+    --green-dim: rgba(46,125,50,0.10);
+    --blue:      #1565c0;
+    --blue-dim:  rgba(21,101,192,0.10);
+    --text:      #2d2a26;
+    --text-dim:  #6b6560;
+    --text-mute: #a39e98;
     --mono:      'DM Mono', monospace;
     --sans:      'DM Sans', sans-serif;
     --display:   'Bebas Neue', sans-serif;
@@ -306,7 +306,7 @@
   /* ─── Modal ──────────────────────────────────────────────────────── */
   .modal-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.7);
+    background: rgba(45,42,38,0.5);
     z-index: 1000;
     display: none; align-items: center; justify-content: center;
     backdrop-filter: blur(4px);
@@ -367,7 +367,7 @@
     transform: translateY(80px); opacity: 0;
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     display: flex; align-items: center; gap: 10px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
   }
   #toast.show { transform: translateY(0); opacity: 1; }
   #toast.success { border-color: var(--green); }
@@ -444,7 +444,7 @@
   <div class="logo">
     <div class="logo-icon">⚙️</div>
     <div>
-      <div class="logo-text">FRIDAIL</div>
+      <div class="logo-text">FRIDAL</div>
       <span class="logo-sub">Downtime Tracker</span>
     </div>
   </div>
@@ -734,7 +734,7 @@ function renderStops(data) {
   const tbody = document.getElementById('stopsBody');
   const table = document.getElementById('stopsTable');
   const empty = document.getElementById('emptyState');
-  const completed = s.filter(x => x.end !== null);
+  const completed = s.filter(x => x.end !== null).reverse();
 
   if (completed.length === 0) {
     table.style.display = 'none';
@@ -808,7 +808,13 @@ window.app = {
     const body = {};
     body[field] = value;
     try {
-      await fetch(API + '/api/stops/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const res = await fetch(API + '/api/stops/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast(d.error || 'Failed to update', 'error');
+        await this.refreshData();
+        return;
+      }
       await this.refreshData();
     } catch (e) { toast('Failed to update', 'error'); }
   },
@@ -919,9 +925,9 @@ window.app = {
   }
 };
 
-// ─── Auto-refresh every 10s ──────────────────────────────────────────────────
+// ─── Auto-refresh every 3s ──────────────────────────────────────────────────
 window.app.refreshData();
-setInterval(() => window.app.refreshData(), 10000);
+setInterval(() => window.app.refreshData(), 3000);
 </script>
 </body>
 </html>
