@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <esp_wifi.h>
 #include "../include/config.h"
 #include <esp_system.h>
 
@@ -38,6 +39,13 @@ static bool sendPost(const char *endpoint) {
 
 static void connectWiFi() {
   WiFi.mode(WIFI_STA);
+
+  // Disable LR mode
+  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+
+  // Disable power save
+  esp_wifi_set_ps(WIFI_PS_NONE);
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   PRINT_DEBUG("Connecting to WiFi: %s\n", WIFI_SSID);
@@ -50,7 +58,9 @@ static void connectWiFi() {
 
   wifiReady = (WiFi.status() == WL_CONNECTED);
   if (wifiReady) {
-    PRINT_DEBUG("WiFi connected, IP: %s\n", WiFi.localIP().toString().c_str());
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    PRINT_DEBUG("WiFi connected, IP: %s  RSSI: %d dBm\n",
+                WiFi.localIP().toString().c_str(), WiFi.RSSI());
   } else {
     PRINT_DEBUG("WiFi connect failed\n");
   }

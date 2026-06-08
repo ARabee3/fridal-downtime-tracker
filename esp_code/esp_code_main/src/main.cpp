@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include "../include/config.h"
 #include "CurrentSensor.h"
 #include "EspNowDriver.h"
@@ -34,9 +35,15 @@ void setup() {
               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
   if (!server.connectWiFi(WIFI_SSID, WIFI_PASSWORD)) {
-    PRINT_DEBUG("ERROR: WiFi connection failed\n");
-  } else {
-    PRINT_DEBUG("WiFi channel: %d\n", WiFi.channel());
+    PRINT_DEBUG("ERROR: WiFi connection failed on first try\n");
+    // Give the radio a moment and retry once
+    delay(2000);
+    if (!server.connectWiFi(WIFI_SSID, WIFI_PASSWORD)) {
+      PRINT_DEBUG("ERROR: WiFi still failed. Will keep retrying in loop()\n");
+    }
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    PRINT_DEBUG("WiFi channel: %d  RSSI: %d dBm\n", WiFi.channel(), WiFi.RSSI());
   }
 
   if (!espNow.begin(SECONDARY_MAC)) {
@@ -60,6 +67,7 @@ void loop() {
   static unsigned long lastStatus = 0;
   static unsigned long lastLoop = 0;
   static unsigned long lastReconnect = 0;
+  static unsigned long lastRssiLog = 0;
 
   loopCount++;
 
@@ -86,15 +94,27 @@ void loop() {
 
   if (!server.isWiFiConnected()) {
     wifiWasDown = true;
-    if (now - lastReconnect >= 15000) {
+    if (now - lastReconnect >= 30000) {  // 30s cooldown (reconnect itself takes ~10s)
       lastReconnect = now;
-      PRINT_DEBUG("[LOOP] WiFi down, async reconnect...\n");
+      PRINT_DEBUG("[LOOP] WiFi down, reconnecting...\n");
       server.reconnectWiFi(WIFI_SSID, WIFI_PASSWORD);
     }
   } else if (wifiWasDown) {
     wifiWasDown = false;
-    PRINT_DEBUG("[LOOP] WiFi reconnected, restoring ESP-NOW peer\n");
+    PRINT_DEBUG("[LOOP] WiFi reconnected! IP: %s  RSSI: %d dBm\n",
+                WiFi.localIP().toString().c_str(), WiFi.RSSI());
     espNow.reAddPeer(SECONDARY_MAC);
+    // Re-confirm power save is off after reconnect
+    esp_wifi_set_ps(WIFI_PS_NONE);
+  }
+
+  // Periodic RSSI logging (every 30s when connected)
+  if (server.isWiFiConnected() && now - lastRssiLog >= 30000) {
+    lastRssiLog = now;
+    int rssi = WiFi.RSSI();
+    if (rssi < -80) {
+      PRINT_DEBUG("[WiFi] WARNING: Weak signal! RSSI: %d dBm\n", rssi);
+    }
   }
 
   if (shouldFail && !failureActive && !httpStartPending) {

@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include "../include/config.h"
 #include "IRSensor.h"
 #include "EspNowDriver.h"
@@ -24,6 +25,13 @@ void setup() {
   PRINT_DEBUG("Connecting to WiFi: %s\n", WIFI_SSID);
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
+
+  // Disable LR mode — use standard 802.11 b/g/n
+  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+
+  // Disable power save — prevents beacon miss / association expire
+  esp_wifi_set_ps(WIFI_PS_NONE);
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   int attempts = 0;
@@ -35,9 +43,11 @@ void setup() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    PRINT_DEBUG("\nWiFi connected! Channel: %d\n", WiFi.channel());
+    // Re-confirm power save off after connection
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    PRINT_DEBUG("\nWiFi connected! Channel: %d  RSSI: %d dBm\n", WiFi.channel(), WiFi.RSSI());
   } else {
-    PRINT_DEBUG("\nWiFi connection failed (ESP-NOW may not work)\n");
+    PRINT_DEBUG("\nWiFi connection failed (ESP-NOW may not work on wrong channel)\n");
   }
 
   uint8_t mac[6];
