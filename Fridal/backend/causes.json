@@ -20,5 +20,11 @@
     "ماكينة - غسيل",
     "ماكينة - غسيل + adj"
   ],
-  "locations": []
+  "locations": [
+    "Filling Machine",
+    "Capping Machine",
+    "Labeling Machine",
+    "Shrinkage Machine",
+    "Packaging Machine"
+  ]
 }

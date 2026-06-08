@@ -499,34 +499,6 @@
     </div>
   </div>
 
-  <!-- Stops Table -->
-  <div class="section-header">
-    <div class="section-title">TODAY'S STOPS</div>
-    <div class="section-badge" id="todayDate">—</div>
-  </div>
-  <div class="table-wrap" id="tableWrap">
-    <div class="empty-state" id="emptyState">
-      <div class="empty-icon">📊</div>
-      <div class="empty-title">NO STOPS RECORDED</div>
-      <div class="empty-sub">Machine is running. Stops will appear here automatically when the sensor reports a failure.</div>
-    </div>
-    <table id="stopsTable" style="display:none">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Start</th>
-          <th>End</th>
-          <th>Duration</th>
-          <th>Location</th>
-          <th>Cause</th>
-          <th>Type</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody id="stopsBody"></tbody>
-    </table>
-  </div>
-
   <!-- Pending section divider -->
   <div class="pending-section section-header" id="pendingHeader" style="display:none">
     <div class="section-title">PENDING CLASSIFICATION</div>
@@ -606,7 +578,6 @@ function render(data) {
   const pending = stops.filter(x => x.status === 'pending');
   const pendingIds = new Set(pending.map(p => p.id));
   const summary = data.summary;
-  const date = data.date;
 
   // ── Stats ──
   document.getElementById('statTotal').textContent = summary.total;
@@ -615,41 +586,6 @@ function render(data) {
   const done = stops.filter(x => x.status === 'done').length;
   document.getElementById('statDone').textContent = done;
   document.getElementById('statPendingSub').textContent = summary.pending + ' pending';
-  document.getElementById('todayDate').textContent = date;
-
-  // ── Table ──
-  const tbody = document.getElementById('stopsBody');
-  const table = document.getElementById('stopsTable');
-  const empty = document.getElementById('emptyState');
-  const completed = stops.filter(x => x.end !== null).reverse();
-
-  if (completed.length === 0) {
-    table.style.display = 'none';
-    empty.style.display = 'block';
-  } else {
-    table.style.display = 'table';
-    empty.style.display = 'none';
-    tbody.innerHTML = completed.map((stop, i) => {
-      const durationSeconds = stop.durationSeconds ?? Math.round((stop.durationMinutes || 0) * 60);
-
-      let badge = '';
-      if (stop.status === 'active') badge = `<span class="badge active"><div class="dot-small"></div> ACTIVE</span>`;
-      else if (stop.isMicrostop) badge = `<span class="badge micro">MICRO</span>`;
-      else if (stop.status === 'pending') badge = `<span class="badge pending">PENDING</span>`;
-      else badge = `<span class="badge done">✓ DONE</span>`;
-
-      return `<tr>
-        <td class="mono" style="color:var(--text-mute)">${i+1}</td>
-        <td class="mono">${stop.start}</td>
-        <td class="mono">${stop.end || '—'}</td>
-        <td class="mono" style="color:${durationSeconds>600?'var(--red)':durationSeconds>180?'var(--accent)':'var(--text)'}">${stop.duration || '—'}</td>
-        <td style="color:var(--text-dim)">${stop.location || '—'}</td>
-        <td style="color:var(--text-dim);font-size:12px">${stop.cause || '—'}</td>
-        <td>${stop.isMicrostop ? `<span style="color:var(--blue);font-size:11px">microstop</span>` : `<span style="color:var(--text-dim);font-size:11px">stop</span>`}</td>
-        <td>${badge}</td>
-      </tr>`;
-    }).join('');
-  }
 
   // ── Pending header ──
   const pendingHeader = document.getElementById('pendingHeader');
