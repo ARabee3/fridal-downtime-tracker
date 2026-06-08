@@ -9,6 +9,7 @@ public:
   EspNowDriver();
 
   bool begin(const uint8_t secondaryMac[6]);
+  bool reAddPeer(const uint8_t secondaryMac[6]);
 
   void onRecv(RecvCallback cb);
 

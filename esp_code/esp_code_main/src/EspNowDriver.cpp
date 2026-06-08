@@ -67,6 +67,21 @@ bool EspNowDriver::begin(const uint8_t secondaryMac[6]) {
   return true;
 }
 
+bool EspNowDriver::reAddPeer(const uint8_t secondaryMac[6]) {
+  if (esp_now_is_peer_exist(secondaryMac)) return true;
+
+  esp_now_peer_info_t peer = {};
+  memcpy(peer.peer_addr, secondaryMac, 6);
+  peer.channel = 0;
+  peer.encrypt = false;
+  if (esp_now_add_peer(&peer) != ESP_OK) {
+    PRINT_DEBUG("[ESP-NOW] Failed to re-add peer\n");
+    return false;
+  }
+  PRINT_DEBUG("[ESP-NOW] Peer re-added after WiFi reconnect\n");
+  return true;
+}
+
 void EspNowDriver::onRecv(RecvCallback cb) { _onRecv = cb; }
 
 unsigned long EspNowDriver::getLastRecvAge() const {

@@ -15,6 +15,7 @@ bool failureActive = false;
 unsigned long failureClearTimer = 0;
 unsigned long lastHttpRetry = 0;
 bool httpStartPending = false;
+bool wifiWasDown = false;
 
 void setup() {
   Serial.begin(115200);
@@ -58,6 +59,7 @@ void loop() {
   static unsigned long loopCount = 0;
   static unsigned long lastStatus = 0;
   static unsigned long lastLoop = 0;
+  static unsigned long lastReconnect = 0;
 
   loopCount++;
 
@@ -83,8 +85,16 @@ void loop() {
   }
 
   if (!server.isWiFiConnected()) {
-    PRINT_DEBUG("[LOOP] WiFi disconnected, reconnecting...\n");
-    server.connectWiFi(WIFI_SSID, WIFI_PASSWORD);
+    wifiWasDown = true;
+    if (now - lastReconnect >= 15000) {
+      lastReconnect = now;
+      PRINT_DEBUG("[LOOP] WiFi down, async reconnect...\n");
+      server.reconnectWiFi(WIFI_SSID, WIFI_PASSWORD);
+    }
+  } else if (wifiWasDown) {
+    wifiWasDown = false;
+    PRINT_DEBUG("[LOOP] WiFi reconnected, restoring ESP-NOW peer\n");
+    espNow.reAddPeer(SECONDARY_MAC);
   }
 
   if (shouldFail && !failureActive && !httpStartPending) {

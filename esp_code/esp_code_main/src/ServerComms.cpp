@@ -5,6 +5,7 @@
 
 ServerComms::ServerComms() {
   _lastStopId[0] = '\0';
+  _wifiInitDone = false;
 }
 
 bool ServerComms::connectWiFi(const char *ssid, const char *password) {
@@ -12,6 +13,7 @@ bool ServerComms::connectWiFi(const char *ssid, const char *password) {
 
   if (WiFi.status() != WL_CONNECTED) {
     WiFi.mode(WIFI_STA);
+    _wifiInitDone = true;
     WiFi.begin(ssid, password);
   } else {
     PRINT_DEBUG("[WiFi] Already connected\n");
@@ -34,6 +36,18 @@ bool ServerComms::connectWiFi(const char *ssid, const char *password) {
 
   PRINT_DEBUG("\n[WiFi] Failed to connect\n");
   return false;
+}
+
+void ServerComms::reconnectWiFi(const char *ssid, const char *password) {
+  if (WiFi.status() == WL_CONNECTED) return;
+
+  if (!_wifiInitDone) {
+    WiFi.mode(WIFI_STA);
+    _wifiInitDone = true;
+  }
+
+  WiFi.begin(ssid, password);
+  PRINT_DEBUG("[WiFi] Reconnect started (async)\n");
 }
 
 bool ServerComms::isWiFiConnected() const {
