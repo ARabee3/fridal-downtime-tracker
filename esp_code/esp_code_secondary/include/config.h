@@ -23,9 +23,9 @@
 // from this secondary IR node.
 #define MAIN_PEER_MAC {0x74, 0x4D, 0xBD, 0x46, 0x1B, 0x24}
 
-// WiFi credentials (to sync on the same channel as main ESP)
-#define WIFI_SSID "OHS"
-#define WIFI_PASSWORD "LOOOL911"
+// WiFi credentials (must be same network as main ESP for ESP-NOW channel sync)
+#define WIFI_SSID "El-ott"
+#define WIFI_PASSWORD "C2@d9d0@yFF#*$"
 
 // Enable verbose debug printing to Serial when set to 1. Useful while testing.
 #define BOARD_DEBUG 1

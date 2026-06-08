@@ -14,12 +14,14 @@
 
 // ========== WiFi CONFIG ==========
 // Replace with your WiFi SSID and password
-#define WIFI_SSID "OHS"
-#define WIFI_PASSWORD "LOOOL911"
+#define WIFI_SSID "El-ott"
+#define WIFI_PASSWORD "C2@d9d0@yFF#*$"
 
 // ========== SERVER CONFIG ==========
-// IP or hostname of the Fridal backend server
-#define SERVER_HOST "10.238.6.240"
+// IP of the laptop/PC running the backend server on the WiFi network.
+// Do NOT use 127.0.0.1 — that points to the ESP itself, not your laptop.
+// Run `ipconfig` (Windows) or `ip a` (Linux) on the server machine to find it.
+#define SERVER_HOST "192.168.0.191"
 #define SERVER_PORT 3000
 #define SERVER_API_PATH "/api/sensor"
 

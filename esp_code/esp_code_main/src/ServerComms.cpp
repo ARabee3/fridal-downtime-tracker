@@ -3,6 +3,43 @@
 #include <HTTPClient.h>
 #include "../include/config.h"
 
+static const char* wifiStatusName(wl_status_t status) {
+  switch (status) {
+    case WL_NO_SHIELD:       return "NO_SHIELD";
+    case WL_IDLE_STATUS:     return "IDLE";
+    case WL_NO_SSID_AVAIL:   return "NO_SSID_AVAIL";
+    case WL_SCAN_COMPLETED:  return "SCAN_COMPLETED";
+    case WL_CONNECTED:       return "CONNECTED";
+    case WL_CONNECT_FAILED:  return "CONNECT_FAILED";
+    case WL_CONNECTION_LOST: return "CONNECTION_LOST";
+    case WL_DISCONNECTED:    return "DISCONNECTED";
+    default:                 return "UNKNOWN";
+  }
+}
+
+static void scanAndPrintNetworks(const char *targetSsid) {
+  PRINT_DEBUG("[WiFi] Scanning networks...\n");
+  int n = WiFi.scanNetworks();
+  if (n <= 0) {
+    PRINT_DEBUG("[WiFi] No networks found! Check antenna / board.\n");
+    return;
+  }
+  PRINT_DEBUG("[WiFi] Found %d network(s):\n", n);
+  bool foundTarget = false;
+  for (int i = 0; i < n; i++) {
+    const char *marker = (WiFi.SSID(i) == targetSsid) ? " <-- TARGET" : "";
+    PRINT_DEBUG("  %2d: %-32s ch=%2d rssi=%d dBm%s\n",
+                i + 1, WiFi.SSID(i).c_str(), WiFi.channel(i),
+                WiFi.RSSI(i), marker);
+    if (WiFi.SSID(i) == targetSsid) foundTarget = true;
+  }
+  if (!foundTarget) {
+    PRINT_DEBUG("[WiFi] WARNING: Target SSID \"%s\" NOT FOUND in scan!\n", targetSsid);
+    PRINT_DEBUG("[WiFi] Check: is the AP on? is it 2.4GHz? is SSID hidden?\n");
+  }
+  WiFi.scanDelete();
+}
+
 ServerComms::ServerComms() {
   _lastStopId[0] = '\0';
   _wifiInitDone = false;
@@ -14,6 +51,9 @@ bool ServerComms::connectWiFi(const char *ssid, const char *password) {
   if (WiFi.status() != WL_CONNECTED) {
     WiFi.mode(WIFI_STA);
     _wifiInitDone = true;
+
+    scanAndPrintNetworks(ssid);
+
     WiFi.begin(ssid, password);
   } else {
     PRINT_DEBUG("[WiFi] Already connected\n");
@@ -22,19 +62,34 @@ bool ServerComms::connectWiFi(const char *ssid, const char *password) {
 
   int attempts = 0;
   const int maxAttempts = 40;
+  wl_status_t lastStatus = WiFi.status();
   while (WiFi.status() != WL_CONNECTED && attempts < maxAttempts) {
     delay(500);
-    PRINT_DEBUG(".");
+    wl_status_t current = WiFi.status();
+    if (current != lastStatus) {
+      PRINT_DEBUG("\n[WiFi] Status changed: %s -> %s (code %d)\n",
+                  wifiStatusName(lastStatus), wifiStatusName(current), (int)current);
+      lastStatus = current;
+    } else {
+      PRINT_DEBUG(".");
+    }
     attempts++;
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    PRINT_DEBUG("\n[WiFi] Connected! IP: %s, Channel: %d\n",
-                WiFi.localIP().toString().c_str(), WiFi.channel());
+  wl_status_t final = WiFi.status();
+  if (final == WL_CONNECTED) {
+    PRINT_DEBUG("\n[WiFi] Connected! IP: %s, Channel: %d, RSSI: %d dBm\n",
+                WiFi.localIP().toString().c_str(), WiFi.channel(), WiFi.RSSI());
     return true;
   }
 
-  PRINT_DEBUG("\n[WiFi] Failed to connect\n");
+  PRINT_DEBUG("\n[WiFi] Failed. Final status: %s (code %d)\n",
+              wifiStatusName(final), (int)final);
+  if (final == WL_CONNECT_FAILED) {
+    PRINT_DEBUG("[WiFi] CONNECT_FAILED usually means wrong password.\n");
+  } else if (final == WL_NO_SSID_AVAIL) {
+    PRINT_DEBUG("[WiFi] NO_SSID_AVAIL means AP not seen — is it 2.4GHz?\n");
+  }
   return false;
 }
 
@@ -46,6 +101,8 @@ void ServerComms::reconnectWiFi(const char *ssid, const char *password) {
     _wifiInitDone = true;
   }
 
+  PRINT_DEBUG("[WiFi] Status: %s (code %d)\n",
+              wifiStatusName(WiFi.status()), (int)WiFi.status());
   WiFi.begin(ssid, password);
   PRINT_DEBUG("[WiFi] Reconnect started (async)\n");
 }
