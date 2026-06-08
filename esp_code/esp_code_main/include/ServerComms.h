@@ -19,4 +19,5 @@ private:
   bool _sendRequest(const char *endpoint, const char *payload, char *outStopId = nullptr, size_t outLen = 0);
   char _lastStopId[64];
   bool _wifiInitDone = false;
+  int _reconnectCount = 0;
 };

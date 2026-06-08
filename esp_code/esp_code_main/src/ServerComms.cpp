@@ -59,6 +59,7 @@ static void scanAndPrintNetworks(const char *targetSsid) {
 ServerComms::ServerComms() {
   _lastStopId[0] = '\0';
   _wifiInitDone = false;
+  _reconnectCount = 0;
 }
 
 bool ServerComms::connectWiFi(const char *ssid, const char *password) {
@@ -145,19 +146,43 @@ bool ServerComms::connectWiFi(const char *ssid, const char *password) {
 }
 
 void ServerComms::reconnectWiFi(const char *ssid, const char *password) {
-  if (WiFi.status() == WL_CONNECTED) return;
+  if (WiFi.status() == WL_CONNECTED) {
+    _reconnectCount = 0;
+    return;
+  }
 
   if (!_wifiInitDone) {
     WiFi.mode(WIFI_STA);
     _wifiInitDone = true;
-  } else {
-    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
   }
 
-  PRINT_DEBUG("[WiFi] Status: %s (code %d)\n",
-              wifiStatusName(WiFi.status()), (int)WiFi.status());
-  WiFi.begin(ssid, password);
-  PRINT_DEBUG("[WiFi] Reconnect started (async)\n");
+  _reconnectCount++;
+
+  PRINT_DEBUG("[WiFi] Reconnect attempt #%d | Status: %s (code %d)\n",
+              _reconnectCount, wifiStatusName(WiFi.status()), (int)WiFi.status());
+
+  if (_reconnectCount <= 3) {
+    WiFi.disconnect(false);
+    delay(100);
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+    WiFi.begin(ssid, password);
+    PRINT_DEBUG("[WiFi] Trying default WPA2...\n");
+  } else {
+    WiFi.disconnect(true);
+    delay(200);
+
+    wifi_config_t conf;
+    memset(&conf, 0, sizeof(conf));
+    strcpy(reinterpret_cast<char*>(conf.sta.ssid), ssid);
+    strcpy(reinterpret_cast<char*>(conf.sta.password), password);
+    conf.sta.threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
+    conf.sta.pmf_cfg.capable = true;
+    conf.sta.pmf_cfg.required = false;
+
+    esp_wifi_set_config(WIFI_IF_STA, &conf);
+    esp_wifi_connect();
+    PRINT_DEBUG("[WiFi] Trying WPA2/WPA3 mixed...\n");
+  }
 }
 
 bool ServerComms::isWiFiConnected() const {
