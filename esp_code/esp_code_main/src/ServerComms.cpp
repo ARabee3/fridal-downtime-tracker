@@ -33,27 +33,43 @@ static const char* wifiAuthName(wifi_auth_mode_t mode) {
   }
 }
 
-static void scanAndPrintNetworks(const char *targetSsid) {
-  PRINT_DEBUG("[WiFi] Scanning networks...\n");
+static bool scanAndFindTarget(const char *targetSsid,
+                              int &outChannel, uint8_t *outBssid,
+                              wifi_auth_mode_t &outAuth) {
+  PRINT_DEBUG("[WiFi] Scanning for target AP...\n");
   int n = WiFi.scanNetworks();
   if (n <= 0) {
     PRINT_DEBUG("[WiFi] No networks found! Check antenna / board.\n");
-    return;
+    return false;
   }
   PRINT_DEBUG("[WiFi] Found %d network(s):\n", n);
-  bool foundTarget = false;
+
   for (int i = 0; i < n; i++) {
-    const char *marker = (WiFi.SSID(i) == targetSsid) ? " <-- TARGET" : "";
+    String found = WiFi.SSID(i);
+    wifi_auth_mode_t auth = WiFi.encryptionType(i);
+    int ch = WiFi.channel(i);
+    int rssi = WiFi.RSSI(i);
+    const char *marker = (found == targetSsid) ? " <-- TARGET" : "";
+
     PRINT_DEBUG("  %2d: %-32s ch=%2d rssi=%d dBm  %s%s\n",
-                i + 1, WiFi.SSID(i).c_str(), WiFi.channel(i),
-                WiFi.RSSI(i), wifiAuthName(WiFi.encryptionType(i)), marker);
-    if (WiFi.SSID(i) == targetSsid) foundTarget = true;
+                i + 1, found.c_str(), ch, rssi, wifiAuthName(auth), marker);
+
+    if (found == targetSsid) {
+      outChannel = ch;
+      outAuth = auth;
+      uint8_t *bssid = WiFi.BSSID(i);
+      if (bssid) {
+        memcpy(outBssid, bssid, 6);
+      }
+      WiFi.scanDelete();
+      return true;
+    }
   }
-  if (!foundTarget) {
-    PRINT_DEBUG("[WiFi] WARNING: Target SSID \"%s\" NOT FOUND in scan!\n", targetSsid);
-    PRINT_DEBUG("[WiFi] Check: is the AP on? is it 2.4GHz? is SSID hidden?\n");
-  }
+
+  PRINT_DEBUG("[WiFi] WARNING: Target SSID \"%s\" NOT FOUND!\n", targetSsid);
+  PRINT_DEBUG("[WiFi] Check: is AP on? is it 2.4GHz? hidden?\n");
   WiFi.scanDelete();
+  return false;
 }
 
 ServerComms::ServerComms() {
@@ -65,21 +81,56 @@ ServerComms::ServerComms() {
 bool ServerComms::connectWiFi(const char *ssid, const char *password) {
   PRINT_DEBUG("[WiFi] Connecting to: %s\n", ssid);
 
-  if (WiFi.status() != WL_CONNECTED) {
-    WiFi.mode(WIFI_STA);
-    _wifiInitDone = true;
-
-    scanAndPrintNetworks(ssid);
-
-    // Disable LR mode, enable b/g/n — LR mode causes CONNECT_FAILED on some boards
-    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
-
-    WiFi.begin(ssid, password);
-  } else {
+  if (WiFi.status() == WL_CONNECTED) {
     PRINT_DEBUG("[WiFi] Already connected\n");
     return true;
   }
 
+  WiFi.mode(WIFI_STA);
+  _wifiInitDone = true;
+
+  int targetChannel = 0;
+  uint8_t targetBssid[6] = {0};
+  wifi_auth_mode_t targetAuth = WIFI_AUTH_OPEN;
+
+  if (!scanAndFindTarget(ssid, targetChannel, targetBssid, targetAuth)) {
+    return false;
+  }
+
+  if (targetAuth == WIFI_AUTH_WPA2_ENTERPRISE) {
+    PRINT_DEBUG("[WiFi] AP uses WPA2-ENTERPRISE — ESP cannot connect with password alone.\n");
+    return false;
+  }
+
+  if (targetChannel > 14) {
+    PRINT_DEBUG("[WiFi] Channel %d > 14 — this is a 5GHz AP. ESP32-S3 only supports 2.4GHz.\n",
+                targetChannel);
+    return false;
+  }
+
+  // Disable LR mode, use standard b/g/n
+  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+
+  // Build config with PMF enabled for modern APs
+  wifi_config_t conf;
+  memset(&conf, 0, sizeof(conf));
+  strcpy(reinterpret_cast<char*>(conf.sta.ssid), ssid);
+  strcpy(reinterpret_cast<char*>(conf.sta.password), password);
+  conf.sta.threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
+  conf.sta.pmf_cfg.capable = true;
+  conf.sta.pmf_cfg.required = false;
+  if (targetChannel > 0) {
+    conf.sta.channel = targetChannel;
+  }
+  if (targetBssid[0] != 0 || targetBssid[1] != 0 || targetBssid[2] != 0) {
+    conf.sta.bssid_set = 1;
+    memcpy(conf.sta.bssid, targetBssid, 6);
+  }
+
+  esp_wifi_set_config(WIFI_IF_STA, &conf);
+  esp_wifi_connect();
+
+  // Wait for connection
   int attempts = 0;
   const int maxAttempts = 40;
   wl_status_t lastStatus = WiFi.status();
@@ -87,8 +138,7 @@ bool ServerComms::connectWiFi(const char *ssid, const char *password) {
     delay(500);
     wl_status_t current = WiFi.status();
     if (current != lastStatus) {
-      PRINT_DEBUG("\n[WiFi] Status changed: %s -> %s (code %d)\n",
-                  wifiStatusName(lastStatus), wifiStatusName(current), (int)current);
+      PRINT_DEBUG("\n[WiFi] Status: %s (code %d)\n", wifiStatusName(current), (int)current);
       lastStatus = current;
     } else {
       PRINT_DEBUG(".");
@@ -102,44 +152,14 @@ bool ServerComms::connectWiFi(const char *ssid, const char *password) {
     return true;
   }
 
-  PRINT_DEBUG("\n[WiFi] Default connect failed. Retrying with WPA2+WPA3 mixed mode...\n");
-
-  WiFi.disconnect(true);
-  delay(200);
-
-  wifi_config_t conf;
-  memset(&conf, 0, sizeof(conf));
-  strcpy(reinterpret_cast<char*>(conf.sta.ssid), ssid);
-  strcpy(reinterpret_cast<char*>(conf.sta.password), password);
-  conf.sta.threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
-  conf.sta.pmf_cfg.capable = true;
-  conf.sta.pmf_cfg.required = false;
-
-  esp_wifi_set_config(WIFI_IF_STA, &conf);
-  esp_wifi_connect();
-
-  attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
-    delay(500);
-    if (WiFi.status() == WL_CONNECT_FAILED) break;
-    PRINT_DEBUG(".");
-    attempts++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    PRINT_DEBUG("\n[WiFi] Connected! IP: %s, Channel: %d\n",
-                WiFi.localIP().toString().c_str(), WiFi.channel());
-    return true;
-  }
+  PRINT_DEBUG("\n[WiFi] Failed after 20s. Last status: %s (code %d)\n",
+              wifiStatusName(WiFi.status()), (int)WiFi.status());
 
   if (WiFi.status() == WL_CONNECT_FAILED) {
-    PRINT_DEBUG("\n[WiFi] WPA2+WPA3 also failed.\n");
-    PRINT_DEBUG("[WiFi] Possible causes:\n");
-    PRINT_DEBUG("[WiFi]  - Wrong password (double-check for typos)\n");
-    PRINT_DEBUG("[WiFi]  - AP is 5GHz only (ESP32-S3 is 2.4GHz only)\n");
-    PRINT_DEBUG("[WiFi]  - AP uses WPA3-only (check router security settings)\n");
-    PRINT_DEBUG("[WiFi]  - MAC address filtering enabled on the AP\n");
-    PRINT_DEBUG("[WiFi]  - Weak signal — try moving ESP closer to the AP\n");
+    PRINT_DEBUG("[WiFi] CONNECT_FAILED: AP rejected auth.\n");
+    PRINT_DEBUG("[WiFi]   - Wrong password?\n");
+    PRINT_DEBUG("[WiFi]   - MAC filtering enabled?\n");
+    PRINT_DEBUG("[WiFi]   - Try a simpler password (alphanumeric only) on the router\n");
   }
 
   return false;
@@ -161,28 +181,24 @@ void ServerComms::reconnectWiFi(const char *ssid, const char *password) {
   PRINT_DEBUG("[WiFi] Reconnect attempt #%d | Status: %s (code %d)\n",
               _reconnectCount, wifiStatusName(WiFi.status()), (int)WiFi.status());
 
-  if (_reconnectCount <= 3) {
-    WiFi.disconnect(false);
-    delay(100);
-    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
-    WiFi.begin(ssid, password);
-    PRINT_DEBUG("[WiFi] Trying default WPA2...\n");
-  } else {
-    WiFi.disconnect(true);
-    delay(200);
+  // Always disconnect WITHOUT disabling the STA interface
+  WiFi.disconnect(false);
+  delay(100);
 
-    wifi_config_t conf;
-    memset(&conf, 0, sizeof(conf));
-    strcpy(reinterpret_cast<char*>(conf.sta.ssid), ssid);
-    strcpy(reinterpret_cast<char*>(conf.sta.password), password);
-    conf.sta.threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
-    conf.sta.pmf_cfg.capable = true;
-    conf.sta.pmf_cfg.required = false;
+  esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
 
-    esp_wifi_set_config(WIFI_IF_STA, &conf);
-    esp_wifi_connect();
-    PRINT_DEBUG("[WiFi] Trying WPA2/WPA3 mixed...\n");
-  }
+  wifi_config_t conf;
+  memset(&conf, 0, sizeof(conf));
+  strcpy(reinterpret_cast<char*>(conf.sta.ssid), ssid);
+  strcpy(reinterpret_cast<char*>(conf.sta.password), password);
+  conf.sta.threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
+  conf.sta.pmf_cfg.capable = true;
+  conf.sta.pmf_cfg.required = false;
+
+  esp_wifi_set_config(WIFI_IF_STA, &conf);
+  esp_wifi_connect();
+
+  PRINT_DEBUG("[WiFi] Reconnect started (async, WPA2+WPA3)\n");
 }
 
 bool ServerComms::isWiFiConnected() const {
