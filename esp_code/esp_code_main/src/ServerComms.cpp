@@ -111,12 +111,12 @@ bool ServerComms::connectWiFi(const char *ssid, const char *password) {
   // Disable LR mode, use standard b/g/n
   esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
 
-  // Build config with PMF enabled for modern APs
+  // Build config with proper threshold (WPA2 minimum, not combined mode)
   wifi_config_t conf;
   memset(&conf, 0, sizeof(conf));
   strcpy(reinterpret_cast<char*>(conf.sta.ssid), ssid);
   strcpy(reinterpret_cast<char*>(conf.sta.password), password);
-  conf.sta.threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
+  conf.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
   conf.sta.pmf_cfg.capable = true;
   conf.sta.pmf_cfg.required = false;
   if (targetChannel > 0) {
@@ -191,7 +191,7 @@ void ServerComms::reconnectWiFi(const char *ssid, const char *password) {
   memset(&conf, 0, sizeof(conf));
   strcpy(reinterpret_cast<char*>(conf.sta.ssid), ssid);
   strcpy(reinterpret_cast<char*>(conf.sta.password), password);
-  conf.sta.threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
+  conf.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
   conf.sta.pmf_cfg.capable = true;
   conf.sta.pmf_cfg.required = false;
 
