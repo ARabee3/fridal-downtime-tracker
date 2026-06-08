@@ -1,11 +1,11 @@
 #pragma once
 
 // WiFi credentials for the network that can reach the Fridal backend
-#define WIFI_SSID "OHS"
-#define WIFI_PASSWORD "LOOOL911"
+#define WIFI_SSID "El-ott"
+#define WIFI_PASSWORD "C2@d9d0@yFF#*$"
 
-// Backend server settings
-#define SERVER_HOST "10.238.6.240"
+// Backend server settings — use the laptop's LAN IP, NOT 127.0.0.1
+#define SERVER_HOST "192.168.0.191"
 #define SERVER_PORT 3000
 #define SERVER_API_BASE "/api/sensor"
 
