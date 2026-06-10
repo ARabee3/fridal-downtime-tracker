@@ -4,7 +4,7 @@ const config = require('../config');
 
 const CAUSES_FILE = path.join(__dirname, '../..', config.causesFile);
 
-const EMPTY_DATA = { causes: [], locations: [] };
+const EMPTY_DATA = { causes: [], locations: [], locationCauses: {} };
 
 function loadCauses() {
   if (!fs.existsSync(CAUSES_FILE)) {

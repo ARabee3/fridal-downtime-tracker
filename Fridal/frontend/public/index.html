@@ -490,7 +490,7 @@
     <div class="stat-card blue">
       <div class="stat-label">Microstops</div>
       <div class="stat-value blue" id="statMicro">0</div>
-      <div class="stat-sub">≤1 min each</div>
+      <div class="stat-sub">≤5 min each</div>
     </div>
     <div class="stat-card green">
       <div class="stat-label">Classified</div>
@@ -649,7 +649,7 @@
 <script>
 // ─── App State ──────────────────────────────────────────────────────────────
 const API = '';
-let stops = [], causes = [], locations = [], editCauses = [], editLocations = [], activeStopStart = null, elapsedInterval = null;
+let stops = [], causes = [], locations = [], locationCauses = {}, editCauses = [], editLocations = [], editLocationCauses = {}, activeStopStart = null, elapsedInterval = null;
 
 // ─── Clock ──────────────────────────────────────────────────────────────────
 function updateClock() {
@@ -751,7 +751,8 @@ function renderStops(data) {
     tbody.innerHTML = completed.map((stop, i) => {
       const isEditable = stop.status === 'pending';
       const locOpts = locations.map(l => `<option value="${l}" ${stop.location===l?'selected':''}>${l}</option>`).join('');
-      const causeOpts = causes.map(c => `<option value="${c}" ${stop.cause===c?'selected':''}>${c}</option>`).join('');
+      const filteredCauses = stop.location ? (locationCauses[stop.location] || causes) : causes;
+      const causeOpts = filteredCauses.map(c => `<option value="${c}" ${stop.cause===c?'selected':''}>${c}</option>`).join('');
 
       let badge = '';
       if (stop.status === 'active') badge = `<span class="badge active"><div class="dot-small"></div> ACTIVE</span>`;
@@ -804,6 +805,7 @@ window.app = {
       const causesData = await causesRes.json();
       causes = causesData.causes || [];
       locations = causesData.locations || [];
+      locationCauses = causesData.locationCauses || {};
       renderStops(stopsData);
     } catch (e) {
       console.error(e);
@@ -856,8 +858,10 @@ window.app = {
     const data = await (await fetch(API + '/api/causes')).json();
     causes = data.causes || [];
     locations = data.locations || [];
+    locationCauses = data.locationCauses || {};
     editCauses = [...causes];
     editLocations = [...locations];
+    editLocationCauses = JSON.parse(JSON.stringify(locationCauses));
     renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
     renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
   },
@@ -890,10 +894,11 @@ window.app = {
 
   async saveCauses() {
     try {
-      const res = await fetch(API + '/api/causes', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ causes: editCauses, locations: editLocations }) });
+      const res = await fetch(API + '/api/causes', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ causes: editCauses, locations: editLocations, locationCauses: editLocationCauses }) });
       const data = await res.json();
       causes = data.causes || editCauses;
       locations = data.locations || editLocations;
+      locationCauses = data.locationCauses || editLocationCauses;
       renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
       renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
       toast('Causes & locations saved');

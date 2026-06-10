@@ -490,7 +490,7 @@
     <div class="stat-card blue">
       <div class="stat-label">Microstops</div>
       <div class="stat-value blue" id="statMicro">0</div>
-      <div class="stat-sub">≤1 min each</div>
+      <div class="stat-sub">≤5 min each</div>
     </div>
     <div class="stat-card green">
       <div class="stat-label">Classified</div>
@@ -521,7 +521,7 @@
 
 <script>
 const API = '';
-let causes = [], locations = [];
+let causes = [], locations = [], locationCauses = {};
 let elapsedInterval = null;
 let pollInterval = null;
 
@@ -650,11 +650,22 @@ function render(data) {
   prevPendingIds = pendingIds;
 }
 
+// ─── Update cause options when location changes ────────────────────────────────
+function updateCauseOptions(stopId, locationValue) {
+  const card = document.getElementById('card-' + stopId);
+  if (!card) return;
+  const causeSelect = card.querySelector('[data-field="cause"]');
+  if (!causeSelect) return;
+  const filteredCauses = locationCauses[locationValue] || [];
+  const prevValue = causeSelect.value;
+  causeSelect.innerHTML = '<option value="">— Select Cause —</option>' +
+    filteredCauses.map(c => `<option value="${c}" ${prevValue===c?'selected':''}>${c}</option>`).join('');
+}
+
 // ─── Create a pending card ───────────────────────────────────────────────────
 function createPendingCard(stop, number) {
   const container = document.getElementById('pendingContainer');
   const locOpts = locations.map(l => `<option value="${l}">${l}</option>`).join('');
-  const causeOpts = causes.map(c => `<option value="${c}">${c}</option>`).join('');
 
   const card = document.createElement('div');
   card.className = 'form-card';
@@ -681,7 +692,7 @@ function createPendingCard(stop, number) {
     </div>
     <div>
       <label class="form-label">Location</label>
-      <select class="form-select" data-field="location">
+      <select class="form-select" data-field="location" onchange="updateCauseOptions('${stop.id}', this.value)">
         <option value="">— Select Location —</option>
         ${locOpts}
       </select>
@@ -689,8 +700,7 @@ function createPendingCard(stop, number) {
     <div>
       <label class="form-label">Cause</label>
       <select class="form-select" data-field="cause">
-        <option value="">— Select Cause —</option>
-        ${causeOpts}
+        <option value="">— Select Location First —</option>
       </select>
     </div>
     <button class="btn-submit" onclick="submitCard('${stop.id}', this)">
@@ -760,6 +770,7 @@ window.app = {
       const causesData = await causesRes.json();
       causes = causesData.causes || [];
       locations = causesData.locations || [];
+      locationCauses = causesData.locationCauses || {};
       render(stopsData);
     } catch (e) {
       console.error(e);
