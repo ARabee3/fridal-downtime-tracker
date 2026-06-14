@@ -1,5 +1,5 @@
 const express = require('express');
-const { loadCauses, saveCauses } = require('../store/causesStore');
+const { loadCauses, saveCauses, ensureBreakCause } = require('../store/causesStore');
 
 const router = express.Router();
 
@@ -13,6 +13,7 @@ router.put('/', (req, res) => {
   if (causes) current.causes = causes;
   if (locations) current.locations = locations;
   if (locationCauses) current.locationCauses = locationCauses;
+  ensureBreakCause(current);
   saveCauses(current);
   res.json({ success: true, ...current });
 });

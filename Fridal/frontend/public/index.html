@@ -844,7 +844,7 @@ function renderLocationsEditor() {
       : `<div class="tag-list">${locCauses.map((c, cIdx) => `
           <div class="tag">
             <span>${c}</span>
-            <button class="tag-remove" onclick="window.app.removeCauseFromLocation(${locIdx}, ${cIdx})">×</button>
+            ${c === 'Break' ? '' : `<button class="tag-remove" onclick="window.app.removeCauseFromLocation(${locIdx}, ${cIdx})">×</button>`}
           </div>`).join('')}</div>`;
     return `
       <div class="location-block">

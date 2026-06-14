@@ -657,10 +657,13 @@ function updateCauseOptions(stopId, locationValue) {
   if (!card) return;
   const causeSelect = card.querySelector('[data-field="cause"]');
   if (!causeSelect) return;
-  const filteredCauses = locationCauses[locationValue] || [];
+  let filteredCauses = locationCauses[locationValue] || [];
+  // Always make Break the first option so workers can quickly mark break-time stops
+  filteredCauses = filteredCauses.filter(c => c !== 'Break');
+  const displayCauses = ['Break', ...filteredCauses];
   const prevValue = causeSelect.value;
   causeSelect.innerHTML = '<option value="">— Select Cause —</option>' +
-    filteredCauses.map(c => `<option value="${c}" ${prevValue===c?'selected':''}>${c}</option>`).join('');
+    displayCauses.map(c => `<option value="${c}" ${prevValue===c?'selected':''}>${c}</option>`).join('');
 }
 
 // ─── Create a pending card ───────────────────────────────────────────────────
