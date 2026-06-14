@@ -242,6 +242,7 @@
   .badge.pending { background: rgba(232,160,32,0.12); color: var(--accent); border-color: var(--accent); }
   .badge.done    { background: var(--green-dim);  color: var(--green); border-color: var(--green); }
   .badge.micro   { background: var(--blue-dim);   color: var(--blue);  border-color: var(--blue); }
+  .badge.break   { background: rgba(106,90,205,0.12); color: #6a5acd; border-color: #6a5acd; }
   .badge .dot-small { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
   .badge.active .dot-small { animation: blink 0.8s step-end infinite; }
 
@@ -435,6 +436,53 @@
   .tab-pane.active { display: block; }
 
   .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  /* ─── Location-first causes editor ───────────────────────────────── */
+  .locations-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .location-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .location-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .location-name {
+    font-family: var(--display);
+    font-size: 18px;
+    letter-spacing: 1.5px;
+    color: var(--text);
+  }
+  .location-causes-count {
+    font-size: 11px;
+    color: var(--text-mute);
+    font-family: var(--mono);
+  }
+  .location-block .tag-list {
+    margin-bottom: 12px;
+    min-height: 32px;
+  }
+  .location-empty {
+    font-size: 12px;
+    color: var(--text-mute);
+    font-style: italic;
+    margin-bottom: 12px;
+  }
+  .add-location-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+    max-width: 480px;
+  }
 </style>
 </head>
 <body>
@@ -485,7 +533,7 @@
     <div class="stat-card">
       <div class="stat-label">Downtime</div>
       <div class="stat-value" id="statDowntime">0m</div>
-      <div class="stat-sub" id="statDowntimeSub">accumulated</div>
+      <div class="stat-sub" id="statDowntimeSub">excluding break time</div>
     </div>
     <div class="stat-card blue">
       <div class="stat-label">Microstops</div>
@@ -552,30 +600,18 @@
 
   <!-- TAB: Causes -->
   <div class="tab-pane" id="tab-causes">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
-      <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div class="section-title">CAUSES LIST</div>
-          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="window.app.clearAllCauses()">Clear All</button>
-        </div>
-        <div class="tag-list" id="causesTags"></div>
-        <div class="add-row">
-          <input class="input-field" id="newCauseInput" placeholder="Add new cause..." onkeydown="if(event.key==='Enter')window.app.addCause()">
-          <button class="btn btn-primary" onclick="window.app.addCause()">Add</button>
-        </div>
-      </div>
-      <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div class="section-title">LOCATIONS LIST</div>
-          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="window.app.clearAllLocations()">Clear All</button>
-        </div>
-        <div class="tag-list" id="locationsTags"></div>
-        <div class="add-row">
-          <input class="input-field" id="newLocationInput" placeholder="Add new location..." onkeydown="if(event.key==='Enter')window.app.addLocation()">
-          <button class="btn btn-primary" onclick="window.app.addLocation()">Add</button>
-        </div>
-      </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="section-title">CAUSES BY LOCATION</div>
+      <div style="font-size:12px;color:var(--text-mute)">Add causes under each location. Workers will only see causes assigned to the location they select.</div>
     </div>
+
+    <div class="locations-editor" id="locationsEditor"></div>
+
+    <div class="add-location-row">
+      <input class="input-field" id="newLocationInput" placeholder="Add new location..." onkeydown="if(event.key==='Enter')window.app.addLocation()">
+      <button class="btn btn-primary" onclick="window.app.addLocation()">Add Location</button>
+    </div>
+
     <div class="divider"></div>
     <div style="display:flex;justify-content:flex-end">
       <button class="btn btn-primary" onclick="window.app.saveCauses()">💾 Save Changes</button>
@@ -636,7 +672,7 @@
           <tr><td class="mono" style="color:var(--accent)">PATCH</td><td class="mono">/api/stops/:id</td><td>Update cause / location</td><td class="mono" style="font-size:11px;color:var(--text-dim)">{cause, location}</td></tr>
           <tr><td class="mono" style="color:var(--green)">POST</td><td class="mono">/api/submit</td><td>Export today to Excel</td><td class="mono" style="font-size:11px;color:var(--text-dim)">—</td></tr>
           <tr><td class="mono" style="color:var(--blue)">GET</td><td class="mono">/api/causes</td><td>Get causes & locations lists</td><td class="mono" style="font-size:11px;color:var(--text-dim)">—</td></tr>
-          <tr><td class="mono" style="color:var(--accent)">PUT</td><td class="mono">/api/causes</td><td>Update causes & locations</td><td class="mono" style="font-size:11px;color:var(--text-dim)">{causes[], locations[]}</td></tr>
+          <tr><td class="mono" style="color:var(--accent)">PUT</td><td class="mono">/api/causes</td><td>Update causes & locations</td><td class="mono" style="font-size:11px;color:var(--text-dim)">{causes[], locations[], locationCauses{}}</td></tr>
         </tbody>
       </table>
     </div>
@@ -649,7 +685,7 @@
 <script>
 // ─── App State ──────────────────────────────────────────────────────────────
 const API = '';
-let stops = [], causes = [], locations = [], locationCauses = {}, editCauses = [], editLocations = [], editLocationCauses = {}, activeStopStart = null, elapsedInterval = null;
+let stops = [], causes = [], locations = [], locationCauses = {}, editLocations = [], editLocationCauses = {}, activeStopStart = null, elapsedInterval = null;
 
 // ─── Clock ──────────────────────────────────────────────────────────────────
 function updateClock() {
@@ -709,6 +745,7 @@ function renderStops(data) {
   // Stats
   document.getElementById('statTotal').textContent = summary.total;
   document.getElementById('statDowntime').textContent = summary.totalFormatted || '0s';
+  document.getElementById('statDowntimeSub').textContent = summary.breakSeconds > 0 ? `${summary.breakFormatted} break excluded` : 'excluding break time';
   document.getElementById('statMicro').textContent = s.filter(x => x.isMicrostop).length;
   const done = s.filter(x => x.status === 'done').length;
   const pending = summary.pending;
@@ -755,7 +792,8 @@ function renderStops(data) {
       const causeOpts = filteredCauses.map(c => `<option value="${c}" ${stop.cause===c?'selected':''}>${c}</option>`).join('');
 
       let badge = '';
-      if (stop.status === 'active') badge = `<span class="badge active"><div class="dot-small"></div> ACTIVE</span>`;
+      if (stop.cause === 'Break') badge = `<span class="badge break">BREAK</span>`;
+      else if (stop.status === 'active') badge = `<span class="badge active"><div class="dot-small"></div> ACTIVE</span>`;
       else if (stop.isMicrostop) badge = `<span class="badge micro">MICRO</span>`;
       else if (stop.status === 'pending') badge = `<span class="badge pending">PENDING</span>`;
       else badge = `<span class="badge done">✓ DONE</span>`;
@@ -791,6 +829,39 @@ function renderCauseTags(list, containerId, removeCallback) {
       <span>${item}</span>
       <button class="tag-remove" onclick="${removeCallback}(${i})">×</button>
     </div>`).join('');
+}
+
+function renderLocationsEditor() {
+  const container = document.getElementById('locationsEditor');
+  if (editLocations.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding:40px"><div class="empty-icon">📍</div><div class="empty-title">NO LOCATIONS</div><div class="empty-sub">Add a location to start assigning causes.</div></div>`;
+    return;
+  }
+  container.innerHTML = editLocations.map((loc, locIdx) => {
+    const locCauses = editLocationCauses[loc] || [];
+    const causeTags = locCauses.length === 0
+      ? `<div class="location-empty">No causes assigned yet.</div>`
+      : `<div class="tag-list">${locCauses.map((c, cIdx) => `
+          <div class="tag">
+            <span>${c}</span>
+            <button class="tag-remove" onclick="window.app.removeCauseFromLocation(${locIdx}, ${cIdx})">×</button>
+          </div>`).join('')}</div>`;
+    return `
+      <div class="location-block">
+        <div class="location-header">
+          <div>
+            <span class="location-name">${loc}</span>
+            <span class="location-causes-count"> — ${locCauses.length} cause${locCauses.length !== 1 ? 's' : ''}</span>
+          </div>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="window.app.removeLocation(${locIdx})">Remove Location</button>
+        </div>
+        ${causeTags}
+        <div class="add-row">
+          <input class="input-field" id="locCauseInput-${locIdx}" placeholder="Add cause to ${loc}..." onkeydown="if(event.key==='Enter')window.app.addCauseToLocation(${locIdx})">
+          <button class="btn btn-primary" onclick="window.app.addCauseToLocation(${locIdx})">Add</button>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 // ─── App Actions ─────────────────────────────────────────────────────────────
@@ -859,60 +930,67 @@ window.app = {
     causes = data.causes || [];
     locations = data.locations || [];
     locationCauses = data.locationCauses || {};
-    editCauses = [...causes];
     editLocations = [...locations];
     editLocationCauses = JSON.parse(JSON.stringify(locationCauses));
-    renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
-    renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
+    renderLocationsEditor();
   },
 
-  addCause() {
-    const input = document.getElementById('newCauseInput');
+  addCauseToLocation(locIdx) {
+    const loc = editLocations[locIdx];
+    const input = document.getElementById('locCauseInput-' + locIdx);
     const val = input.value.trim();
-    if (!val) return;
-    editCauses.push(val); input.value = '';
-    renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
+    if (!val || !loc) return;
+    if (!editLocationCauses[loc]) editLocationCauses[loc] = [];
+    if (!editLocationCauses[loc].includes(val)) editLocationCauses[loc].push(val);
+    input.value = '';
+    renderLocationsEditor();
+    input.focus();
   },
 
-  removeCause(i) {
-    editCauses.splice(i, 1);
-    renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
+  removeCauseFromLocation(locIdx, cIdx) {
+    const loc = editLocations[locIdx];
+    if (!loc || !editLocationCauses[loc]) return;
+    editLocationCauses[loc].splice(cIdx, 1);
+    renderLocationsEditor();
   },
 
   addLocation() {
     const input = document.getElementById('newLocationInput');
     const val = input.value.trim();
     if (!val) return;
-    editLocations.push(val); input.value = '';
-    renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
+    if (!editLocations.includes(val)) {
+      editLocations.push(val);
+      editLocationCauses[val] = [];
+    }
+    input.value = '';
+    renderLocationsEditor();
+    input.focus();
   },
 
-  removeLocation(i) {
-    editLocations.splice(i, 1);
-    renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
+  removeLocation(locIdx) {
+    const loc = editLocations[locIdx];
+    if (!loc) return;
+    if (!confirm(`Remove location "${loc}" and all its cause assignments?`)) return;
+    editLocations.splice(locIdx, 1);
+    delete editLocationCauses[loc];
+    renderLocationsEditor();
   },
 
   async saveCauses() {
     try {
-      const res = await fetch(API + '/api/causes', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ causes: editCauses, locations: editLocations, locationCauses: editLocationCauses }) });
+      const derivedCauses = [...new Set(Object.values(editLocationCauses).flat())];
+      const res = await fetch(API + '/api/causes', {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ causes: derivedCauses, locations: editLocations, locationCauses: editLocationCauses })
+      });
       const data = await res.json();
-      causes = data.causes || editCauses;
+      causes = data.causes || derivedCauses;
       locations = data.locations || editLocations;
       locationCauses = data.locationCauses || editLocationCauses;
-      renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
-      renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
+      renderLocationsEditor();
       toast('Causes & locations saved');
     } catch (e) { toast('Failed to save', 'error'); }
-  },
-
-  clearAllCauses() {
-    editCauses = [];
-    renderCauseTags(editCauses, 'causesTags', 'window.app.removeCause');
-  },
-
-  clearAllLocations() {
-    editLocations = [];
-    renderCauseTags(editLocations, 'locationsTags', 'window.app.removeLocation');
   },
 
   async loadExports() {

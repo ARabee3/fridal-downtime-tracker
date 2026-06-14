@@ -15,6 +15,14 @@ if (!fs.existsSync(EXPORTS_DIR)) {
 
 const LOCK_TTL_MS = 60000; // 1 minute worker lock
 
+function isBreakStop(stop) {
+  return stop.cause === 'Break';
+}
+
+function getDurationSeconds(stop) {
+  return stop.durationSeconds ?? Math.round((stop.durationMinutes || 0) * 60);
+}
+
 router.get('/', (req, res) => {
   const data = loadData();
   const today = getTodayKey();
@@ -33,7 +41,8 @@ router.get('/', (req, res) => {
   if (needsSave) saveData(data);
 
   const stops = data.stops.filter(s => s.date === today);
-  const totalSeconds = stops.reduce((sum, s) => sum + (s.durationSeconds ?? Math.round((s.durationMinutes || 0) * 60)), 0);
+  const totalSeconds = stops.filter(s => !isBreakStop(s)).reduce((sum, s) => sum + getDurationSeconds(s), 0);
+  const breakSeconds = stops.filter(s => isBreakStop(s)).reduce((sum, s) => sum + getDurationSeconds(s), 0);
   const pending = stops.filter(s => s.status === 'pending').length;
 
   res.json({
@@ -44,6 +53,8 @@ router.get('/', (req, res) => {
       totalMinutes: totalSeconds / 60,
       totalSeconds,
       totalFormatted: formatDuration(totalSeconds),
+      breakSeconds,
+      breakFormatted: formatDuration(breakSeconds),
       pending,
       active: stops.filter(s => s.status === 'active').length
     }
@@ -124,25 +135,31 @@ router.post('/submit', (req, res) => {
 
   XLSX.utils.book_append_sheet(wb, ws, 'Downtime Log');
 
-  const totalSeconds = stops.reduce((sum, s) => sum + (s.durationSeconds ?? Math.round((s.durationMinutes || 0) * 60)), 0);
-  const microstops = stops.filter(s => s.isMicrostop);
-  const regularStops = stops.filter(s => !s.isMicrostop);
+  const productiveStops = stops.filter(s => !isBreakStop(s));
+  const breakStops = stops.filter(s => isBreakStop(s));
+  const totalSeconds = productiveStops.reduce((sum, s) => sum + getDurationSeconds(s), 0);
+  const breakSeconds = breakStops.reduce((sum, s) => sum + getDurationSeconds(s), 0);
+  const microstops = productiveStops.filter(s => s.isMicrostop);
+  const regularStops = productiveStops.filter(s => !s.isMicrostop);
 
   const causeGroups = {};
   regularStops.forEach(s => {
     const key = s.cause || 'Unclassified';
     if (!causeGroups[key]) causeGroups[key] = { count: 0, minutes: 0 };
     causeGroups[key].count++;
-    causeGroups[key].minutes += (s.durationSeconds ?? Math.round((s.durationMinutes || 0) * 60));
+    causeGroups[key].minutes += getDurationSeconds(s);
   });
 
   const summaryRows = [
     { 'Metric': 'Report Date', 'Value': today },
     { 'Metric': 'Total Stops', 'Value': stops.length },
     { 'Metric': 'Regular Stops', 'Value': regularStops.length },
-    { 'Metric': 'Microstops (≤1 min)', 'Value': microstops.length },
+    { 'Metric': 'Microstops (≤5 min)', 'Value': microstops.length },
+    { 'Metric': 'Break Stops', 'Value': breakStops.length },
     { 'Metric': 'Total Downtime', 'Value': formatDuration(totalSeconds) },
     { 'Metric': 'Total Downtime (sec)', 'Value': totalSeconds },
+    { 'Metric': 'Break Time', 'Value': formatDuration(breakSeconds) },
+    { 'Metric': 'Break Time (sec)', 'Value': breakSeconds },
     { 'Metric': '', 'Value': '' },
     { 'Metric': '--- By Cause ---', 'Value': '' },
     ...Object.entries(causeGroups).map(([cause, d]) => ({

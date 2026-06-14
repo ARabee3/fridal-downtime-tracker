@@ -485,7 +485,7 @@
     <div class="stat-card">
       <div class="stat-label">Downtime</div>
       <div class="stat-value" id="statDowntime">0m</div>
-      <div class="stat-sub" id="statDowntimeSub">accumulated</div>
+      <div class="stat-sub" id="statDowntimeSub">excluding break time</div>
     </div>
     <div class="stat-card blue">
       <div class="stat-label">Microstops</div>
@@ -582,6 +582,7 @@ function render(data) {
   // ── Stats ──
   document.getElementById('statTotal').textContent = summary.total;
   document.getElementById('statDowntime').textContent = summary.totalFormatted || '0s';
+  document.getElementById('statDowntimeSub').textContent = summary.breakSeconds > 0 ? `${summary.breakFormatted} break excluded` : 'excluding break time';
   document.getElementById('statMicro').textContent = stops.filter(x => x.isMicrostop).length;
   const done = stops.filter(x => x.status === 'done').length;
   document.getElementById('statDone').textContent = done;
